@@ -1,0 +1,1624 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Échiquier — jouer contre Stockfish, résoudre des puzzles</title>
+<meta name="description" content="Partie d'échecs contre le moteur Stockfish et puzzles tactiques Lichess, entièrement dans le navigateur.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#14181d;
+  --panel:#1a1f26;
+  --panel-2:#20262f;
+  --line:#2c333d;
+  --bone:#e7e4da;
+  --slate:#838f9d;
+  --dim:#59646f;
+  --you:#63d2c3;
+  --engine:#e9a53f;
+  --danger:#e0645c;
+  --sq-light:#cdc8b9;
+  --sq-dark:#5f7169;
+  --radius:3px;
+  --mono:"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --display:"Bricolage Grotesque", system-ui, sans-serif;
+}
+
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg);
+  color:var(--bone);
+  font-family:var(--mono);
+  font-size:13px;
+  line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+  padding:24px 20px 48px;
+}
+
+/* ---------- en-tête ---------- */
+.masthead{
+  max-width:1140px;margin:0 auto 22px;
+  display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;
+  border-bottom:1px solid var(--line);padding-bottom:14px;
+}
+.wordmark{
+  font-family:var(--display);font-weight:800;font-size:clamp(26px,4vw,38px);
+  letter-spacing:-.035em;margin:0;line-height:1.12;padding-top:2px;
+}
+.wordmark em{font-style:normal;color:var(--engine)}
+.engine-id{
+  font-size:11px;color:var(--dim);letter-spacing:.09em;text-transform:uppercase;
+  margin-left:auto;display:flex;align-items:center;gap:8px;
+}
+.pulse{width:6px;height:6px;border-radius:50%;background:var(--dim);flex:none}
+.pulse.on{background:var(--you);box-shadow:0 0 0 3px rgba(99,210,195,.15)}
+.pulse.busy{background:var(--engine);box-shadow:0 0 0 3px rgba(233,165,63,.15)}
+.pulse.off{background:var(--danger)}
+
+/* ---------- grille principale ---------- */
+.layout{
+  max-width:1140px;margin:0 auto;
+  display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:26px;align-items:start;
+}
+@media (max-width:900px){ .layout{grid-template-columns:minmax(0,1fr)} }
+
+/* ---------- zone échiquier ---------- */
+.board-area{display:flex;gap:12px;align-items:stretch;justify-content:center}
+
+.evalbar{
+  width:16px;flex:none;background:#232a32;border:1px solid var(--line);
+  position:relative;overflow:hidden;border-radius:var(--radius);
+  align-self:stretch;
+}
+.evalbar .white-share{
+  position:absolute;left:0;right:0;bottom:0;height:50%;
+  background:linear-gradient(180deg,#efece2,#cfcabb);
+  transition:height .45s cubic-bezier(.22,.61,.36,1);
+}
+.evalbar .mid{position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(233,165,63,.55)}
+
+.board-col{flex:1 1 auto;min-width:0;width:100%;max-width:min(72vh,620px)}
+.board-wrap{width:100%;display:grid;grid-template-columns:16px minmax(0,1fr);grid-template-rows:auto 16px;gap:4px}
+.ranks,.files{display:grid;font-size:9px;color:var(--dim);letter-spacing:.05em}
+.ranks{grid-template-rows:repeat(8,minmax(0,1fr));align-items:center;justify-items:center}
+.files{grid-column:2;grid-template-columns:repeat(8,minmax(0,1fr));align-items:center;justify-items:center}
+
+.board{
+  grid-column:2;grid-row:1;
+  width:100%;aspect-ratio:1/1;
+  display:grid;
+  grid-template-columns:repeat(8,minmax(0,1fr));
+  grid-template-rows:repeat(8,minmax(0,1fr));
+  border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;
+  touch-action:none;user-select:none;
+}
+.sq{
+  position:relative;display:flex;align-items:center;justify-content:center;
+  cursor:default;min-width:0;min-height:0;
+}
+.sq.light{background:var(--sq-light)}
+.sq.dark{background:var(--sq-dark)}
+.sq.playable{cursor:pointer}
+.sq.last{box-shadow:inset 0 0 0 100px rgba(233,165,63,.22)}
+.sq.sel{box-shadow:inset 0 0 0 3px var(--you)}
+.sq.check{box-shadow:inset 0 0 0 100px rgba(224,100,92,.38)}
+
+.pc{
+  font-size:1em;line-height:1;pointer-events:none;
+  transform:translateY(-2px);
+}
+/* taille fixée en JS d'après la largeur réelle d'une case (voir sizePieces) */
+.board{font-size:56px}
+.pc.w{color:#f5f3ec;text-shadow:0 0 1px #1b2026, 0 1px 0 #1b2026, 1px 0 0 #1b2026, -1px 0 0 #1b2026, 0 -1px 0 #1b2026}
+.pc.b{color:#21262c;text-shadow:0 0 1px #e7e4da, 0 1px 0 rgba(231,228,218,.6)}
+
+.dot{position:absolute;width:26%;height:26%;border-radius:50%;background:rgba(99,210,195,.55);pointer-events:none}
+.ring{position:absolute;inset:6%;border-radius:50%;border:3px solid rgba(99,210,195,.6);pointer-events:none}
+
+.drag-ghost{position:fixed;z-index:99;pointer-events:none;transform:translate(-50%,-50%);font-size:64px;line-height:1}
+
+/* ---------- panneau ---------- */
+.panel{display:flex;flex-direction:column;gap:14px;min-width:0}
+#gamePanel,#puzzlePanel{display:flex;flex-direction:column;gap:14px;min-width:0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:13px 14px}
+.eyebrow{
+  font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);
+  margin:0 0 9px;display:flex;justify-content:space-between;align-items:center;
+}
+
+#status{font-family:var(--display);font-weight:600;font-size:17px;letter-spacing:-.01em;margin:0}
+#substatus{color:var(--slate);font-size:11.5px;margin:3px 0 0}
+.card.turn-you{border-left:2px solid var(--you)}
+.card.turn-engine{border-left:2px solid var(--engine)}
+.card.over{border-left:2px solid var(--bone)}
+
+.row{display:flex;gap:7px;flex-wrap:wrap}
+button{
+  font-family:var(--mono);font-size:11px;letter-spacing:.05em;text-transform:uppercase;
+  background:var(--panel-2);color:var(--bone);border:1px solid var(--line);
+  border-radius:var(--radius);padding:7px 11px;cursor:pointer;transition:background .12s,border-color .12s;
+}
+button:hover:not(:disabled){background:#2a323c;border-color:#3c4652}
+button:focus-visible{outline:2px solid var(--you);outline-offset:2px}
+button:disabled{opacity:.35;cursor:not-allowed}
+button.primary{background:var(--you);color:#0f1418;border-color:var(--you);font-weight:700}
+button.primary:hover:not(:disabled){background:#7ee0d2}
+
+.field{margin-bottom:11px}
+.field:last-child{margin-bottom:0}
+label.lbl{display:block;font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);margin-bottom:6px}
+.seg{display:grid;grid-auto-flow:column;gap:4px}
+.seg button{width:100%;padding:6px 4px}
+.seg button[aria-pressed="true"]{background:var(--bone);color:#14181d;border-color:var(--bone);font-weight:700}
+input[type=range]{width:100%;accent-color:var(--you);margin:2px 0 0}
+.level-name{color:var(--bone);font-size:11px;float:right;text-transform:none;letter-spacing:0}
+
+/* ---------- feuille de partie ---------- */
+.sheet{max-height:190px;overflow-y:auto;font-size:11.5px;scrollbar-width:thin}
+.sheet table{width:100%;border-collapse:collapse}
+.sheet td{padding:2.5px 5px;vertical-align:baseline}
+.sheet td.n{color:var(--dim);width:30px;text-align:right;font-size:10px}
+.sheet td.mv{cursor:default}
+.sheet tr:hover td{background:rgba(255,255,255,.03)}
+.sheet .cur{color:var(--engine);font-weight:700}
+.empty{color:var(--dim);font-size:11px}
+
+/* ---------- console moteur ---------- */
+#console{font-size:10px;color:var(--dim);line-height:1.65;height:76px;overflow:hidden;
+  display:flex;flex-direction:column;justify-content:flex-end;word-break:break-all}
+#console b{color:var(--slate);font-weight:500}
+.metrics{display:flex;gap:14px;font-size:10px;color:var(--slate);margin-top:8px;border-top:1px solid var(--line);padding-top:8px}
+.metrics span b{color:var(--bone);font-weight:700}
+
+/* ---------- promotion ---------- */
+.overlay{position:fixed;inset:0;background:rgba(10,13,16,.72);display:none;align-items:center;justify-content:center;z-index:50}
+.overlay.show{display:flex}
+.promo{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;text-align:center}
+.promo .choices{display:flex;gap:6px;margin-top:12px}
+.promo .choices button{font-size:34px;padding:6px 12px;line-height:1}
+
+/* ---------- bascule partie / puzzles ---------- */
+.modes{display:flex;gap:4px}
+.modes button{padding:6px 14px}
+.modes button[aria-pressed="true"]{background:var(--bone);color:#14181d;border-color:var(--bone);font-weight:700}
+
+/* ---------- puzzles ---------- */
+.card.good{border-left:2px solid var(--you)}
+.card.bad{border-left:2px solid var(--danger)}
+
+.pz-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.pz-rating{font-family:var(--display);font-weight:800;font-size:27px;letter-spacing:-.025em;line-height:1}
+.pz-steps{font-size:10px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;text-align:right}
+.chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:10px}
+.chip{
+  font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate);
+  border:1px solid var(--line);border-radius:2px;padding:2px 6px;background:var(--panel-2);
+}
+.chip.tag{color:var(--engine);border-color:rgba(233,165,63,.35)}
+
+select{
+  font-family:var(--mono);font-size:11px;width:100%;
+  background:var(--panel-2);color:var(--bone);
+  border:1px solid var(--line);border-radius:var(--radius);padding:7px 8px;
+}
+select:focus-visible{outline:2px solid var(--you);outline-offset:2px}
+
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.stat{min-width:0}
+.stat b{display:block;font-family:var(--display);font-weight:800;font-size:19px;letter-spacing:-.02em;line-height:1.15}
+.stat span{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
+.delta{font-size:11px;font-weight:700;letter-spacing:0;text-transform:none}
+.delta.up{color:var(--you)}
+.delta.down{color:var(--danger)}
+.pz-note{color:var(--slate);font-size:11px;margin:10px 0 0}
+.pz-note a{color:var(--slate)}
+[hidden]{display:none!important}
+
+/* ---------- pied ---------- */
+.foot{max-width:1140px;margin:26px auto 0;color:var(--dim);font-size:10px;border-top:1px solid var(--line);padding-top:12px}
+.foot a{color:var(--slate)}
+
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <h1 class="wordmark">Échi<em>quier</em></h1>
+  <nav class="modes" id="modeSeg">
+    <button data-mode="game" aria-pressed="true">Partie</button>
+    <button data-mode="puzzle" aria-pressed="false">Puzzles</button>
+  </nav>
+  <div class="engine-id"><span class="pulse" id="pulse"></span><span id="engineName">démarrage…</span></div>
+</header>
+
+<main class="layout">
+  <section class="board-area">
+    <div class="evalbar" id="evalbar" title="Évaluation (blancs en bas)">
+      <div class="white-share" id="evalWhite"></div><div class="mid"></div>
+    </div>
+    <div class="board-col">
+      <div class="board-wrap">
+        <div class="ranks" id="ranks"></div>
+        <div class="board" id="board"></div>
+        <div class="files" id="files"></div>
+      </div>
+    </div>
+  </section>
+
+  <aside class="panel">
+    <div class="card" id="statusCard">
+      <p id="status">Nouvelle partie</p>
+      <p id="substatus">À toi de jouer.</p>
+    </div>
+
+    <div id="gamePanel">
+    <div class="card">
+      <p class="eyebrow">Réglages</p>
+      <div class="field">
+        <label class="lbl" for="level">Niveau <span class="level-name" id="levelName">Club</span></label>
+        <input type="range" id="level" min="0" max="5" step="1" value="2">
+      </div>
+      <div class="field">
+        <span class="lbl">Tes pièces</span>
+        <div class="seg" id="sideSeg">
+          <button data-side="w" aria-pressed="true">Blancs</button>
+          <button data-side="b" aria-pressed="false">Noirs</button>
+        </div>
+      </div>
+      <div class="row">
+        <button class="primary" id="newBtn">Nouvelle partie</button>
+        <button id="undoBtn">Annuler</button>
+        <button id="flipBtn">Pivoter</button>
+        <button id="hintBtn">Indice</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <p class="eyebrow">Feuille de partie <button id="pgnBtn" style="padding:2px 7px;font-size:9px">Copier PGN</button></p>
+      <div class="sheet" id="sheet"><p class="empty">Les coups s'inscrivent ici.</p></div>
+    </div>
+
+    <div class="card">
+      <p class="eyebrow">Sortie du moteur</p>
+      <div id="console"><span>en attente…</span></div>
+      <div class="metrics">
+        <span>éval <b id="mEval">0.00</b></span>
+        <span>prof. <b id="mDepth">—</b></span>
+        <span>nœuds <b id="mNodes">—</b></span>
+      </div>
+    </div>
+    </div><!-- /gamePanel -->
+
+    <div id="puzzlePanel" hidden>
+      <div class="card">
+        <p class="eyebrow">Puzzle <span id="pzId"></span></p>
+        <div class="pz-head">
+          <span class="pz-rating" id="pzRating">—</span>
+          <span class="pz-steps" id="pzSteps"></span>
+        </div>
+        <div class="chips" id="pzThemes"></div>
+        <div class="row" style="margin-top:13px">
+          <button class="primary" id="pzNext">Suivant</button>
+          <button id="pzHint">Indice</button>
+          <button id="pzSolve">Solution</button>
+          <button id="pzRetry">Rejouer</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <p class="eyebrow">Sélection</p>
+        <div class="field">
+          <label class="lbl" for="pzTheme">Thème</label>
+          <select id="pzTheme"></select>
+        </div>
+        <div class="row">
+          <button id="pzDaily">Puzzle du jour</button>
+          <button id="pzReset">Remettre à zéro</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <p class="eyebrow">Progression <span class="delta" id="pzDelta"></span></p>
+        <div class="stats">
+          <div class="stat"><b id="stRating">1200</b><span>ton elo</span></div>
+          <div class="stat"><b id="stSolved">0</b><span>résolus</span></div>
+          <div class="stat"><b id="stStreak">0</b><span>série</span></div>
+          <div class="stat"><b id="stBest">0</b><span>record</span></div>
+        </div>
+        <p class="pz-note" id="pzNote"></p>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<footer class="foot">
+  Stockfish tourne entièrement dans ton navigateur (WebAssembly, aucun serveur).
+  Moteur sous licence <a href="https://github.com/nmrugg/stockfish.js">GPLv3</a>.
+  Puzzles extraits de la <a href="https://database.lichess.org/#puzzles">base Lichess</a> (CC0).
+</footer>
+
+<div class="overlay" id="promoOverlay">
+  <div class="promo">
+    <p class="eyebrow" style="margin:0">Promotion</p>
+    <div class="choices" id="promoChoices"></div>
+  </div>
+</div>
+
+<script>
+/* =========================================================================
+   1. NOYAU D'ÉCHECS — règles complètes, sans dépendance externe
+   Index 0 = a8, index 63 = h1.  Majuscules = blancs, minuscules = noirs.
+   ========================================================================= */
+const FILES = "abcdefgh";
+const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+
+const sqName = i => FILES[i & 7] + (8 - (i >> 3));
+const nameSq = s => (8 - +s[1]) * 8 + FILES.indexOf(s[0]);
+const isW = p => p >= "A" && p <= "Z";
+const colorOf = p => (isW(p) ? "w" : "b");
+const other = c => (c === "w" ? "b" : "w");
+
+const DIAG = [[-1,-1],[-1,1],[1,-1],[1,1]];
+const ORTH = [[-1,0],[1,0],[0,-1],[0,1]];
+const STAR = DIAG.concat(ORTH);
+const KNIGHT = [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
+
+function parseFen(fen) {
+  const [rows, turn, cast, ep, half, full] = fen.trim().split(/\s+/);
+  const b = new Array(64).fill("");
+  let i = 0;
+  for (const ch of rows) {
+    if (ch === "/") continue;
+    if (ch >= "1" && ch <= "8") i += +ch;
+    else b[i++] = ch;
+  }
+  return {
+    b, turn,
+    cast: { K: cast.includes("K"), Q: cast.includes("Q"), k: cast.includes("k"), q: cast.includes("q") },
+    ep: ep === "-" ? -1 : nameSq(ep),
+    half: +half || 0,
+    full: +full || 1
+  };
+}
+
+function toFen(st) {
+  let rows = [];
+  for (let r = 0; r < 8; r++) {
+    let s = "", empty = 0;
+    for (let f = 0; f < 8; f++) {
+      const p = st.b[r * 8 + f];
+      if (!p) { empty++; continue; }
+      if (empty) { s += empty; empty = 0; }
+      s += p;
+    }
+    if (empty) s += empty;
+    rows.push(s);
+  }
+  const c = (st.cast.K ? "K" : "") + (st.cast.Q ? "Q" : "") + (st.cast.k ? "k" : "") + (st.cast.q ? "q" : "");
+  return `${rows.join("/")} ${st.turn} ${c || "-"} ${st.ep < 0 ? "-" : sqName(st.ep)} ${st.half} ${st.full}`;
+}
+
+function cloneState(st) {
+  return { b: st.b.slice(), turn: st.turn, cast: { ...st.cast }, ep: st.ep, half: st.half, full: st.full };
+}
+
+function kingSq(st, c) {
+  const k = c === "w" ? "K" : "k";
+  for (let i = 0; i < 64; i++) if (st.b[i] === k) return i;
+  return -1;
+}
+
+/* Est-ce que la case `sq` est attaquée par le camp `by` ? */
+function attacked(st, sq, by) {
+  const r = sq >> 3, f = sq & 7, b = st.b;
+  // pions
+  const pr = by === "w" ? r + 1 : r - 1;
+  const pawn = by === "w" ? "P" : "p";
+  if (pr >= 0 && pr < 8) {
+    if (f > 0 && b[pr * 8 + f - 1] === pawn) return true;
+    if (f < 7 && b[pr * 8 + f + 1] === pawn) return true;
+  }
+  // cavaliers
+  const kn = by === "w" ? "N" : "n";
+  for (const [dr, df] of KNIGHT) {
+    const nr = r + dr, nf = f + df;
+    if (nr < 0 || nr > 7 || nf < 0 || nf > 7) continue;
+    if (b[nr * 8 + nf] === kn) return true;
+  }
+  // roi
+  const kg = by === "w" ? "K" : "k";
+  for (const [dr, df] of STAR) {
+    const nr = r + dr, nf = f + df;
+    if (nr < 0 || nr > 7 || nf < 0 || nf > 7) continue;
+    if (b[nr * 8 + nf] === kg) return true;
+  }
+  // pièces longue portée
+  const scan = (dirs, set) => {
+    for (const [dr, df] of dirs) {
+      let nr = r + dr, nf = f + df;
+      while (nr >= 0 && nr < 8 && nf >= 0 && nf < 8) {
+        const p = b[nr * 8 + nf];
+        if (p) { if (colorOf(p) === by && set.includes(p.toUpperCase())) return true; break; }
+        nr += dr; nf += df;
+      }
+    }
+    return false;
+  };
+  if (scan(ORTH, ["R", "Q"])) return true;
+  if (scan(DIAG, ["B", "Q"])) return true;
+  return false;
+}
+
+const inCheck = (st, c) => attacked(st, kingSq(st, c), other(c));
+
+/* Coups pseudo-légaux du trait */
+function pseudoMoves(st) {
+  const out = [], b = st.b, me = st.turn, opp = other(me);
+  const push = m => out.push(m);
+
+  for (let sq = 0; sq < 64; sq++) {
+    const p = b[sq];
+    if (!p || colorOf(p) !== me) continue;
+    const r = sq >> 3, f = sq & 7, t = p.toUpperCase();
+
+    if (t === "P") {
+      const dr = me === "w" ? -1 : 1;
+      const startRank = me === "w" ? 6 : 1;
+      const lastRank = me === "w" ? 0 : 7;
+      const one = (r + dr) * 8 + f;
+      if (r + dr >= 0 && r + dr < 8 && !b[one]) {
+        if (r + dr === lastRank) for (const q of "QRBN") push({ from: sq, to: one, piece: p, promo: q });
+        else {
+          push({ from: sq, to: one, piece: p });
+          const two = (r + 2 * dr) * 8 + f;
+          if (r === startRank && !b[two]) push({ from: sq, to: two, piece: p, dbl: true });
+        }
+      }
+      for (const df of [-1, 1]) {
+        const nf = f + df, nr = r + dr;
+        if (nf < 0 || nf > 7 || nr < 0 || nr > 7) continue;
+        const to = nr * 8 + nf, tp = b[to];
+        if (tp && colorOf(tp) === opp) {
+          if (nr === lastRank) for (const q of "QRBN") push({ from: sq, to, piece: p, cap: tp, promo: q });
+          else push({ from: sq, to, piece: p, cap: tp });
+        } else if (to === st.ep) {
+          push({ from: sq, to, piece: p, cap: me === "w" ? "p" : "P", ep: true });
+        }
+      }
+      continue;
+    }
+
+    if (t === "N" || t === "K") {
+      const steps = t === "N" ? KNIGHT : STAR;
+      for (const [dr, df] of steps) {
+        const nr = r + dr, nf = f + df;
+        if (nr < 0 || nr > 7 || nf < 0 || nf > 7) continue;
+        const to = nr * 8 + nf, tp = b[to];
+        if (tp && colorOf(tp) === me) continue;
+        push({ from: sq, to, piece: p, cap: tp || undefined });
+      }
+      continue;
+    }
+
+    const dirs = t === "B" ? DIAG : t === "R" ? ORTH : STAR;
+    for (const [dr, df] of dirs) {
+      let nr = r + dr, nf = f + df;
+      while (nr >= 0 && nr < 8 && nf >= 0 && nf < 8) {
+        const to = nr * 8 + nf, tp = b[to];
+        if (tp) { if (colorOf(tp) === opp) push({ from: sq, to, piece: p, cap: tp }); break; }
+        push({ from: sq, to, piece: p });
+        nr += dr; nf += df;
+      }
+    }
+  }
+
+  // roques
+  const home = me === "w" ? 56 : 0;
+  const kingHere = b[home + 4] === (me === "w" ? "K" : "k");
+  if (kingHere && !attacked(st, home + 4, opp)) {
+    const kSide = me === "w" ? st.cast.K : st.cast.k;
+    const qSide = me === "w" ? st.cast.Q : st.cast.q;
+    const rook = me === "w" ? "R" : "r";
+    if (kSide && b[home + 5] === "" && b[home + 6] === "" && b[home + 7] === rook
+        && !attacked(st, home + 5, opp) && !attacked(st, home + 6, opp))
+      push({ from: home + 4, to: home + 6, piece: b[home + 4], castle: "k" });
+    if (qSide && b[home + 3] === "" && b[home + 2] === "" && b[home + 1] === "" && b[home] === rook
+        && !attacked(st, home + 3, opp) && !attacked(st, home + 2, opp))
+      push({ from: home + 4, to: home + 2, piece: b[home + 4], castle: "q" });
+  }
+  return out;
+}
+
+function makeMove(st, m) {
+  const n = cloneState(st);
+  const me = st.turn, b = n.b;
+  b[m.from] = "";
+  b[m.to] = m.promo ? (me === "w" ? m.promo : m.promo.toLowerCase()) : m.piece;
+
+  if (m.ep) b[(me === "w" ? (m.to >> 3) + 1 : (m.to >> 3) - 1) * 8 + (m.to & 7)] = "";
+  if (m.castle === "k") { b[m.to + 1] = ""; b[m.to - 1] = me === "w" ? "R" : "r"; }
+  if (m.castle === "q") { b[m.to - 2] = ""; b[m.to + 1] = me === "w" ? "R" : "r"; }
+
+  // droits de roque
+  if (m.piece === "K") { n.cast.K = n.cast.Q = false; }
+  if (m.piece === "k") { n.cast.k = n.cast.q = false; }
+  if (m.from === 63 || m.to === 63) n.cast.K = false;
+  if (m.from === 56 || m.to === 56) n.cast.Q = false;
+  if (m.from === 7  || m.to === 7)  n.cast.k = false;
+  if (m.from === 0  || m.to === 0)  n.cast.q = false;
+
+  n.ep = m.dbl ? (me === "w" ? m.to + 8 : m.to - 8) : -1;
+  n.half = (m.piece.toUpperCase() === "P" || m.cap) ? 0 : st.half + 1;
+  n.full = me === "b" ? st.full + 1 : st.full;
+  n.turn = other(me);
+  return n;
+}
+
+function legalMoves(st) {
+  const me = st.turn;
+  return pseudoMoves(st).filter(m => !inCheck(makeMove(st, m), me));
+}
+
+function uciOf(m) {
+  return sqName(m.from) + sqName(m.to) + (m.promo ? m.promo.toLowerCase() : "");
+}
+
+function moveToSan(st, m, all) {
+  if (m.castle) var san = m.castle === "k" ? "O-O" : "O-O-O";
+  else {
+    const t = m.piece.toUpperCase();
+    let s = "";
+    if (t === "P") {
+      if (m.cap) s += FILES[m.from & 7] + "x";
+      s += sqName(m.to);
+      if (m.promo) s += "=" + m.promo;
+    } else {
+      s += t;
+      // Un homonyme est une pièce identique venant d'une AUTRE case : comparer
+      // les cases de départ, pas l'identité des objets — `m` peut provenir
+      // d'une liste de coups régénérée (coups scénarisés des puzzles).
+      const rivals = all.filter(x => x.from !== m.from && x.piece === m.piece && x.to === m.to);
+      if (rivals.length) {
+        const sameFile = rivals.some(x => (x.from & 7) === (m.from & 7));
+        const sameRank = rivals.some(x => (x.from >> 3) === (m.from >> 3));
+        if (!sameFile) s += FILES[m.from & 7];
+        else if (!sameRank) s += 8 - (m.from >> 3);
+        else s += sqName(m.from);
+      }
+      if (m.cap) s += "x";
+      s += sqName(m.to);
+    }
+    var san = s;
+  }
+  const after = makeMove(st, m);
+  if (inCheck(after, after.turn)) san += legalMoves(after).length ? "+" : "#";
+  return san;
+}
+
+function insufficientMaterial(st) {
+  const pieces = st.b.filter(Boolean);
+  if (pieces.some(p => "PpQqRr".includes(p))) return false;
+  const minors = pieces.filter(p => "NnBb".includes(p));
+  if (minors.length <= 1) return true;
+  if (minors.length === 2 && minors.every(p => p.toUpperCase() === "B")) {
+    const sqs = [];
+    st.b.forEach((p, i) => { if (p.toUpperCase() === "B") sqs.push(((i >> 3) + (i & 7)) & 1); });
+    return sqs[0] === sqs[1];
+  }
+  return false;
+}
+
+/* =========================================================================
+   2. COUCHE MOTEUR
+   Priorité 1 : Stockfish WASM déposé dans ./engine/ (même origine)
+   Priorité 2 : Stockfish WASM via CDN jsDelivr (worker blob + importScripts)
+   Priorité 3 : moteur de secours écrit en JS ci-dessous (toujours jouable)
+   ========================================================================= */
+
+const ENGINE_SOURCES = [
+  { url: "engine/stockfish-18-lite-single.js", same: true,  label: "stockfish 18 lite · local" },
+  { url: "engine/stockfish.js",                same: true,  label: "stockfish · local" },
+  { url: "https://cdn.jsdelivr.net/npm/stockfish@18.0.0/src/stockfish-18-lite-single.js", same: false, label: "stockfish 18 lite · cdn" },
+  { url: "https://cdn.jsdelivr.net/npm/stockfish@16.0.0/src/stockfish-nnue-16-single.js", same: false, label: "stockfish 16 · cdn" }
+];
+
+const Engine = {
+  worker: null,
+  label: "moteur intégré",
+  ready: false,
+  onLine: null,      // callback(ligne UCI brute)
+  onBest: null,      // callback(uciMove)
+  _busy: false
+};
+
+function makeWorker(src) {
+  if (src.same) return new Worker(src.url);
+  // Un Worker ne peut pas être créé depuis une autre origine : on passe par un
+  // blob qui fait importScripts() (autorisé cross-origin), en indiquant à
+  // Emscripten où trouver le .wasm via locateFile.
+  const base = src.url.slice(0, src.url.lastIndexOf("/") + 1);
+  const shim = `var Module={locateFile:function(p){return ${JSON.stringify(base)}+p;}};
+                self.Module=Module; importScripts(${JSON.stringify(src.url)});`;
+  return new Worker(URL.createObjectURL(new Blob([shim], { type: "application/javascript" })));
+}
+
+function tryEngine(src, timeoutMs = 15000) {
+  return new Promise(resolve => {
+    let w;
+    try { w = makeWorker(src); } catch (e) { return resolve(null); }
+    let done = false;
+    const finish = ok => {
+      if (done) return; done = true;
+      clearTimeout(timer);
+      if (!ok) { try { w.terminate(); } catch (e) {} resolve(null); }
+      else resolve(w);
+    };
+    const timer = setTimeout(() => finish(false), timeoutMs);
+    w.onerror = () => finish(false);
+    w.onmessage = e => {
+      const line = typeof e.data === "string" ? e.data : (e.data && e.data.data) || "";
+      if (typeof line === "string" && line.indexOf("uciok") === 0) finish(true);
+    };
+    try { w.postMessage("uci"); } catch (e) { finish(false); }
+  });
+}
+
+async function bootEngine(onStatus) {
+  for (const src of ENGINE_SOURCES) {
+    onStatus("chargement · " + src.label);
+    const w = await tryEngine(src);
+    if (!w) continue;
+    Engine.worker = w;
+    Engine.label = src.label;
+    Engine.ready = true;
+    w.onmessage = e => {
+      const line = typeof e.data === "string" ? e.data : (e.data && e.data.data) || "";
+      if (typeof line !== "string") return;
+      if (Engine.onLine) Engine.onLine(line);
+      if (line.startsWith("bestmove")) {
+        Engine._busy = false;
+        const uci = line.split(/\s+/)[1];
+        if (Engine.onBest) Engine.onBest(uci === "(none)" ? null : uci);
+      }
+    };
+    w.postMessage("setoption name Hash value 32");
+    w.postMessage("ucinewgame");
+    w.postMessage("isready");
+    return true;
+  }
+  Engine.ready = false;
+  Engine.label = "moteur intégré (repli)";
+  return false;
+}
+
+function engineNewGame() {
+  if (Engine.worker) Engine.worker.postMessage("ucinewgame");
+}
+
+/* Demande un coup. `lvl` est l'objet niveau courant, `st` l'état de jeu. */
+function engineGo(st, lvl) {
+  if (Engine.worker) {
+    Engine._busy = true;
+    Engine.worker.postMessage("setoption name Skill Level value " + lvl.skill);
+    if (lvl.elo) {
+      Engine.worker.postMessage("setoption name UCI_LimitStrength value true");
+      Engine.worker.postMessage("setoption name UCI_Elo value " + lvl.elo);
+    } else {
+      Engine.worker.postMessage("setoption name UCI_LimitStrength value false");
+    }
+    Engine.worker.postMessage("position fen " + toFen(st));
+    Engine.worker.postMessage(`go movetime ${lvl.ms} depth ${lvl.depth}`);
+  } else {
+    setTimeout(() => {
+      const m = fallbackSearch(st, lvl.fbDepth);
+      if (Engine.onLine) Engine.onLine(`info depth ${lvl.fbDepth} score cp ${fbLastScore} nodes ${fbNodes} pv ${m ? uciOf(m) : ""}`);
+      if (Engine.onBest) Engine.onBest(m ? uciOf(m) : null);
+    }, 60);
+  }
+}
+
+function engineStop() {
+  if (Engine.worker && Engine._busy) Engine.worker.postMessage("stop");
+}
+
+/* ------------------------- moteur de secours ------------------------------
+   Négamax alpha-bêta avec tables de position. Modeste, mais suffisant pour
+   que l'application reste jouable si le WASM ne charge pas.
+   ------------------------------------------------------------------------ */
+const VAL = { P: 100, N: 320, B: 330, R: 500, Q: 900, K: 20000 };
+const PST = {
+  P: [0,0,0,0,0,0,0,0, 50,50,50,50,50,50,50,50, 10,10,20,30,30,20,10,10,
+      5,5,10,25,25,10,5,5, 0,0,0,20,20,0,0,0, 5,-5,-10,0,0,-10,-5,5,
+      5,10,10,-20,-20,10,10,5, 0,0,0,0,0,0,0,0],
+  N: [-50,-40,-30,-30,-30,-30,-40,-50, -40,-20,0,0,0,0,-20,-40, -30,0,10,15,15,10,0,-30,
+      -30,5,15,20,20,15,5,-30, -30,0,15,20,20,15,0,-30, -30,5,10,15,15,10,5,-30,
+      -40,-20,0,5,5,0,-20,-40, -50,-40,-30,-30,-30,-30,-40,-50],
+  B: [-20,-10,-10,-10,-10,-10,-10,-20, -10,0,0,0,0,0,0,-10, -10,0,5,10,10,5,0,-10,
+      -10,5,5,10,10,5,5,-10, -10,0,10,10,10,10,0,-10, -10,10,10,10,10,10,10,-10,
+      -10,5,0,0,0,0,5,-10, -20,-10,-10,-10,-10,-10,-10,-20],
+  R: [0,0,0,0,0,0,0,0, 5,10,10,10,10,10,10,5, -5,0,0,0,0,0,0,-5, -5,0,0,0,0,0,0,-5,
+      -5,0,0,0,0,0,0,-5, -5,0,0,0,0,0,0,-5, -5,0,0,0,0,0,0,-5, 0,0,0,5,5,0,0,0],
+  Q: [-20,-10,-10,-5,-5,-10,-10,-20, -10,0,0,0,0,0,0,-10, -10,0,5,5,5,5,0,-10,
+      -5,0,5,5,5,5,0,-5, 0,0,5,5,5,5,0,-5, -10,5,5,5,5,5,0,-10,
+      -10,0,5,0,0,0,0,-10, -20,-10,-10,-5,-5,-10,-10,-20],
+  K: [-30,-40,-40,-50,-50,-40,-40,-30, -30,-40,-40,-50,-50,-40,-40,-30,
+      -30,-40,-40,-50,-50,-40,-40,-30, -30,-40,-40,-50,-50,-40,-40,-30,
+      -20,-30,-30,-40,-40,-30,-30,-20, -10,-20,-20,-20,-20,-20,-20,-10,
+      20,20,0,0,0,0,20,20, 20,30,10,0,0,10,30,20]
+};
+
+let fbNodes = 0, fbLastScore = 0;
+
+function evaluate(st) {
+  let s = 0;
+  for (let i = 0; i < 64; i++) {
+    const p = st.b[i];
+    if (!p) continue;
+    const t = p.toUpperCase();
+    const pst = PST[t][isW(p) ? i : (7 - (i >> 3)) * 8 + (i & 7)];
+    s += isW(p) ? VAL[t] + pst : -(VAL[t] + pst);
+  }
+  return st.turn === "w" ? s : -s;
+}
+
+function orderMoves(ms) {
+  return ms.sort((a, b) => {
+    const sa = (a.cap ? VAL[a.cap.toUpperCase()] * 10 - VAL[a.piece.toUpperCase()] : 0) + (a.promo ? 800 : 0);
+    const sb = (b.cap ? VAL[b.cap.toUpperCase()] * 10 - VAL[b.piece.toUpperCase()] : 0) + (b.promo ? 800 : 0);
+    return sb - sa;
+  });
+}
+
+function negamax(st, depth, alpha, beta) {
+  fbNodes++;
+  const ms = orderMoves(legalMoves(st));
+  if (!ms.length) return inCheck(st, st.turn) ? -30000 + (10 - depth) : 0;
+  if (depth <= 0) return evaluate(st);
+  for (const m of ms) {
+    const sc = -negamax(makeMove(st, m), depth - 1, -beta, -alpha);
+    if (sc >= beta) return beta;
+    if (sc > alpha) alpha = sc;
+  }
+  return alpha;
+}
+
+function fallbackSearch(st, depth) {
+  fbNodes = 0;
+  const ms = orderMoves(legalMoves(st));
+  if (!ms.length) return null;
+  let best = ms[0], bestScore = -Infinity;
+  const jitter = depth <= 1 ? 45 : 0;   // un peu d'imprécision aux bas niveaux
+  for (const m of ms) {
+    const sc = -negamax(makeMove(st, m), depth - 1, -Infinity, Infinity) + (Math.random() * jitter | 0);
+    if (sc > bestScore) { bestScore = sc; best = m; }
+  }
+  fbLastScore = st.turn === "w" ? bestScore : -bestScore;
+  return best;
+}
+
+/* =========================================================================
+   3. INTERFACE
+   ========================================================================= */
+const GLYPH = { k: "\u265A", q: "\u265B", r: "\u265C", b: "\u265D", n: "\u265E", p: "\u265F" };
+
+const LEVELS = [
+  { name: "Débutant", skill: 0,  elo: 800,  ms: 300,  depth: 5,  fbDepth: 1 },
+  { name: "Amateur",  skill: 3,  elo: 1100, ms: 500,  depth: 8,  fbDepth: 2 },
+  { name: "Club",     skill: 7,  elo: 1500, ms: 800,  depth: 12, fbDepth: 2 },
+  { name: "Fort",     skill: 12, elo: 1900, ms: 1300, depth: 16, fbDepth: 3 },
+  { name: "Expert",   skill: 17, elo: 2400, ms: 2200, depth: 20, fbDepth: 3 },
+  { name: "Maximum",  skill: 20, elo: null, ms: 4000, depth: 30, fbDepth: 3 }
+];
+
+const G = {
+  st: parseFen(START_FEN),
+  history: [],          // { san, uci, before }
+  legal: [],
+  human: "w",
+  orient: "w",
+  level: LEVELS[2],
+  sel: -1,
+  lastMove: null,
+  over: null,           // texte de fin de partie
+  mode: "idle",         // idle | thinking | hint
+  hint: null,
+  reps: {}
+};
+
+/* Mode courant de l'application : "game" (contre Stockfish) ou "puzzle". */
+let MODE = "game";
+
+/* Camp choisi pour les parties. Le mode puzzle impose le camp du puzzle à
+   G.human : on garde le choix de l'utilisateur à part pour le restaurer. */
+let gameSide = "w";
+
+const $ = id => document.getElementById(id);
+const els = {
+  board: $("board"), ranks: $("ranks"), files: $("files"), sheet: $("sheet"),
+  status: $("status"), sub: $("substatus"), card: $("statusCard"),
+  evalWhite: $("evalWhite"), console: $("console"),
+  mEval: $("mEval"), mDepth: $("mDepth"), mNodes: $("mNodes"),
+  pulse: $("pulse"), engineName: $("engineName"),
+  overlay: $("promoOverlay"), promoChoices: $("promoChoices")
+};
+
+/* ---------- construction de la grille ---------- */
+const cells = [];
+for (let i = 0; i < 64; i++) {
+  const d = document.createElement("div");
+  d.className = "sq";
+  els.board.appendChild(d);
+  cells.push(d);
+}
+
+function viewToSq(v) { return G.orient === "w" ? v : 63 - v; }
+
+function drawCoords() {
+  els.ranks.innerHTML = ""; els.files.innerHTML = "";
+  for (let i = 0; i < 8; i++) {
+    const r = document.createElement("span");
+    r.textContent = G.orient === "w" ? 8 - i : i + 1;
+    els.ranks.appendChild(r);
+    const f = document.createElement("span");
+    f.textContent = G.orient === "w" ? FILES[i] : FILES[7 - i];
+    els.files.appendChild(f);
+  }
+}
+
+function render() {
+  const myTurn = G.st.turn === G.human && !G.over;
+  const checkSq = inCheck(G.st, G.st.turn) ? kingSq(G.st, G.st.turn) : -1;
+  const targets = G.sel >= 0 ? G.legal.filter(m => m.from === G.sel) : [];
+
+  for (let v = 0; v < 64; v++) {
+    const sq = viewToSq(v), p = G.st.b[sq], cell = cells[v];
+    const dark = ((sq >> 3) + (sq & 7)) & 1;
+    let cls = "sq " + (dark ? "dark" : "light");
+    if (G.lastMove && (sq === G.lastMove.from || sq === G.lastMove.to)) cls += " last";
+    if (sq === G.sel) cls += " sel";
+    if (sq === checkSq) cls += " check";
+    if (myTurn && p && colorOf(p) === G.human) cls += " playable";
+    if (targets.some(m => m.to === sq)) cls += " playable";
+    cell.className = cls;
+
+    let html = "";
+    if (p) html += `<span class="pc ${isW(p) ? "w" : "b"}">${GLYPH[p.toLowerCase()]}</span>`;
+    const t = targets.find(m => m.to === sq);
+    if (t) html += t.cap || t.ep ? `<span class="ring"></span>` : `<span class="dot"></span>`;
+    if (G.hint && (sq === G.hint.from || sq === G.hint.to))
+      html += `<span class="ring" style="border-color:rgba(233,165,63,.85)"></span>`;
+    cell.innerHTML = html;
+  }
+  drawSheet();
+}
+
+/* ---------- feuille de partie ---------- */
+function drawSheet() {
+  if (!G.history.length) { els.sheet.innerHTML = `<p class="empty">Les coups s'inscrivent ici.</p>`; return; }
+  let rows = "";
+  for (let i = 0; i < G.history.length; i += 2) {
+    const w = G.history[i], b = G.history[i + 1];
+    const lastIdx = G.history.length - 1;
+    rows += `<tr><td class="n">${i / 2 + 1}.</td>` +
+            `<td class="mv ${i === lastIdx ? "cur" : ""}">${w.san}</td>` +
+            `<td class="mv ${i + 1 === lastIdx ? "cur" : ""}">${b ? b.san : ""}</td></tr>`;
+  }
+  els.sheet.innerHTML = `<table>${rows}</table>`;
+  els.sheet.scrollTop = els.sheet.scrollHeight;
+}
+
+/* ---------- statut ---------- */
+function setStatus(main, sub, tone) {
+  els.status.textContent = main;
+  els.sub.textContent = sub;
+  els.card.className = "card" + (tone ? " " + tone : "");
+}
+
+function refreshStatus() {
+  if (MODE === "puzzle") return;   // le mode puzzle écrit ses propres messages
+  if (G.over) { setStatus(G.over.title, G.over.detail, "over"); return; }
+  if (G.st.turn === G.human) {
+    const chk = inCheck(G.st, G.human);
+    setStatus(chk ? "Échec au roi" : "À toi de jouer",
+      chk ? "Tu dois parer l'échec." : `Tu as ${G.legal.length} coups légaux.`, "turn-you");
+  } else {
+    setStatus("Le moteur réfléchit", `${G.level.name} · ${Engine.label}`, "turn-engine");
+  }
+}
+
+/* ---------- barre d'évaluation ---------- */
+function setEval(cpWhite, mateIn) {
+  let pct;
+  if (mateIn != null) pct = mateIn > 0 ? 100 : 0;
+  else pct = 100 * (1 / (1 + Math.exp(-0.0038 * cpWhite)));
+  els.evalWhite.style.height = Math.max(2, Math.min(98, pct)) + "%";
+  els.mEval.textContent = mateIn != null ? "M" + Math.abs(mateIn) : (cpWhite / 100).toFixed(2);
+}
+
+/* ---------- console moteur ---------- */
+const logLines = [];
+function logInfo(line) {
+  if (line.startsWith("info") && line.includes(" pv ")) {
+    const d = /depth (\d+)/.exec(line), n = /nodes (\d+)/.exec(line);
+    const cp = /score cp (-?\d+)/.exec(line), mt = /score mate (-?\d+)/.exec(line);
+    if (d) els.mDepth.textContent = d[1];
+    if (n) els.mNodes.textContent = (+n[1] > 1e6 ? (+n[1] / 1e6).toFixed(1) + "M" : +n[1] > 1e3 ? Math.round(+n[1] / 1e3) + "k" : n[1]);
+    const sign = G.st.turn === "w" ? 1 : -1;
+    if (mt) setEval(0, sign * +mt[1]); else if (cp) setEval(sign * +cp[1], null);
+    const pv = line.split(" pv ")[1] || "";
+    logLines.push(`<b>d${d ? d[1] : "?"}</b> ${pv.split(" ").slice(0, 8).join(" ")}`);
+  } else if (line.startsWith("bestmove")) {
+    logLines.push(`<b>bestmove</b> ${line.split(" ")[1]}`);
+  } else return;
+  while (logLines.length > 5) logLines.shift();
+  els.console.innerHTML = logLines.map(l => `<div>${l}</div>`).join("");
+}
+
+/* ---------- fin de partie ---------- */
+function positionKey() { return toFen(G.st).split(" ").slice(0, 4).join(" "); }
+
+function checkGameOver() {
+  G.legal = legalMoves(G.st);
+  const key = positionKey();
+  G.reps[key] = (G.reps[key] || 0) + 1;
+
+  if (!G.legal.length) {
+    if (inCheck(G.st, G.st.turn)) {
+      const winner = other(G.st.turn);
+      G.over = {
+        title: winner === G.human ? "Échec et mat — tu gagnes" : "Échec et mat — le moteur gagne",
+        detail: `Les ${winner === "w" ? "blancs" : "noirs"} l'emportent en ${Math.ceil(G.history.length / 2)} coups.`,
+        result: winner === "w" ? "1-0" : "0-1"
+      };
+      setEval(0, winner === "w" ? 1 : -1);
+    } else {
+      G.over = { title: "Pat", detail: "Aucun coup légal, mais pas d'échec. Partie nulle.", result: "1/2-1/2" };
+    }
+  } else if (G.st.half >= 100) {
+    G.over = { title: "Nulle", detail: "Règle des 50 coups sans prise ni poussée de pion.", result: "1/2-1/2" };
+  } else if (G.reps[key] >= 3) {
+    G.over = { title: "Nulle", detail: "Position répétée trois fois.", result: "1/2-1/2" };
+  } else if (insufficientMaterial(G.st)) {
+    G.over = { title: "Nulle", detail: "Matériel insuffisant pour mater.", result: "1/2-1/2" };
+  }
+  return !!G.over;
+}
+
+/* ---------- appliquer un coup ----------
+   `scripted` = coup joué par l'application (réponse d'un puzzle), pas par
+   l'humain : le mode puzzle n'a alors rien à valider. */
+function applyMove(m, scripted) {
+  const san = moveToSan(G.st, m, G.legal);
+  const uci = uciOf(m);
+  G.history.push({ san, uci, before: G.st });
+  G.st = makeMove(G.st, m);
+  G.lastMove = m;
+  G.sel = -1;
+  G.hint = null;
+  const finished = checkGameOver();
+  render();
+  refreshStatus();
+  if (MODE === "puzzle") { pzAfterMove(uci, scripted, finished); return; }
+  if (!finished && G.st.turn !== G.human) askEngine();
+}
+
+/* ---------- demander un coup au moteur ---------- */
+function askEngine() {
+  G.mode = "thinking";
+  els.pulse.className = "pulse busy";
+  engineGo(G.st, G.level);
+}
+
+function askHint() {
+  if (G.over || G.st.turn !== G.human || G.mode !== "idle") return;
+  G.mode = "hint";
+  els.pulse.className = "pulse busy";
+  engineGo(G.st, LEVELS[3]);
+}
+
+function onBestMove(uci) {
+  els.pulse.className = "pulse " + (Engine.ready ? "on" : "off");
+  const mode = G.mode;
+  G.mode = "idle";
+  if (!uci || mode === "idle") return;      // réponse obsolète (annulation, nouvelle partie)
+  const from = nameSq(uci.slice(0, 2)), to = nameSq(uci.slice(2, 4));
+  const promo = uci[4] ? uci[4].toUpperCase() : null;
+  const m = G.legal.find(x => x.from === from && x.to === to && (promo ? x.promo === promo : !x.promo));
+  if (!m) return;
+  if (mode === "hint") { G.hint = m; render(); refreshStatus(); }
+  else applyMove(m);
+}
+
+/* ---------- interactions ---------- */
+let drag = null;
+
+function squareFromEvent(e) {
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  const cell = el && el.closest ? el.closest(".sq") : null;
+  if (!cell) return -1;
+  return viewToSq(cells.indexOf(cell));
+}
+
+function trySelect(sq) {
+  const p = G.st.b[sq];
+  if (p && colorOf(p) === G.human && G.st.turn === G.human && !G.over) { G.sel = sq; return true; }
+  return false;
+}
+
+function tryMove(to) {
+  if (G.sel < 0) return false;
+  const cands = G.legal.filter(m => m.from === G.sel && m.to === to);
+  if (!cands.length) return false;
+  if (cands.length > 1 && cands[0].promo) { openPromotion(cands); return true; }
+  applyMove(cands[0]);
+  return true;
+}
+
+els.board.addEventListener("pointerdown", e => {
+  if (G.over || G.st.turn !== G.human) return;
+  const sq = squareFromEvent(e);
+  if (sq < 0) return;
+  if (G.sel >= 0 && tryMove(sq)) return;
+  if (trySelect(sq)) {
+    render();
+    const p = G.st.b[sq];
+    drag = { from: sq, moved: false, ghost: null, glyph: GLYPH[p.toLowerCase()], white: isW(p) };
+    els.board.setPointerCapture(e.pointerId);
+  } else { G.sel = -1; G.hint = null; render(); }
+});
+
+window.addEventListener("pointermove", e => {
+  if (!drag) return;
+  if (!drag.moved) {
+    drag.moved = true;
+    const g = document.createElement("div");
+    g.className = "drag-ghost pc " + (drag.white ? "w" : "b");
+    g.textContent = drag.glyph;
+    g.style.fontSize = (els.board.clientWidth / 8 * 0.85) + "px";
+    document.body.appendChild(g);
+    drag.ghost = g;
+  }
+  drag.ghost.style.left = e.clientX + "px";
+  drag.ghost.style.top = e.clientY + "px";
+});
+
+window.addEventListener("pointerup", e => {
+  if (!drag) return;
+  const d = drag; drag = null;
+  if (d.ghost) d.ghost.remove();
+  if (!d.moved) return;                 // simple clic : la sélection reste
+  const to = squareFromEvent(e);
+  if (to >= 0 && to !== d.from) { if (!tryMove(to)) { G.sel = -1; render(); } }
+});
+
+/* ---------- promotion ---------- */
+let promoCands = null;
+function openPromotion(cands) {
+  promoCands = cands;
+  const order = ["Q", "R", "B", "N"];
+  els.promoChoices.innerHTML = order.map(q =>
+    `<button data-q="${q}"><span class="pc ${G.human === "w" ? "w" : "b"}">${GLYPH[q.toLowerCase()]}</span></button>`).join("");
+  els.overlay.classList.add("show");
+}
+els.promoChoices.addEventListener("click", e => {
+  const btn = e.target.closest("button[data-q]");
+  if (!btn || !promoCands) return;
+  const m = promoCands.find(x => x.promo === btn.dataset.q);
+  els.overlay.classList.remove("show");
+  promoCands = null;
+  if (m) applyMove(m);
+});
+
+/* ---------- commandes ---------- */
+function newGame() {
+  engineStop();
+  engineNewGame();
+  G.st = parseFen(START_FEN);
+  G.history = []; G.reps = {}; G.over = null; G.lastMove = null; G.sel = -1; G.hint = null; G.mode = "idle";
+  G.orient = G.human;
+  logLines.length = 0;
+  els.console.innerHTML = "<span>en attente…</span>";
+  els.mDepth.textContent = els.mNodes.textContent = "—";
+  setEval(0, null);
+  G.legal = legalMoves(G.st);
+  drawCoords(); render(); refreshStatus();
+  if (G.st.turn !== G.human) askEngine();
+}
+
+$("newBtn").onclick = newGame;
+
+$("flipBtn").onclick = () => { G.orient = other(G.orient); drawCoords(); render(); };
+
+$("hintBtn").onclick = askHint;
+
+$("undoBtn").onclick = () => {
+  if (!G.history.length) return;
+  engineStop();
+  G.mode = "idle";
+  els.pulse.className = "pulse " + (Engine.ready ? "on" : "off");
+
+  let entry = G.history.pop();
+  G.st = entry.before;
+  if (G.st.turn !== G.human && G.history.length) {
+    entry = G.history.pop();
+    G.st = entry.before;
+  }
+
+  G.over = null; G.sel = -1; G.hint = null; G.reps = {};
+  const last = G.history[G.history.length - 1];
+  G.lastMove = last ? moveFromUci(last.before, last.uci) : null;
+  G.legal = legalMoves(G.st);
+  render(); refreshStatus();
+  if (G.st.turn !== G.human) askEngine();
+};
+
+function moveFromUci(st, uci) {
+  const from = nameSq(uci.slice(0, 2)), to = nameSq(uci.slice(2, 4));
+  const promo = uci[4] ? uci[4].toUpperCase() : null;
+  return legalMoves(st).find(m => m.from === from && m.to === to && (promo ? m.promo === promo : !m.promo));
+}
+
+$("level").oninput = e => {
+  G.level = LEVELS[+e.target.value];
+  $("levelName").textContent = G.level.name;
+};
+
+document.getElementById("sideSeg").addEventListener("click", e => {
+  const btn = e.target.closest("button[data-side]");
+  if (!btn) return;
+  [...e.currentTarget.children].forEach(b => b.setAttribute("aria-pressed", String(b === btn)));
+  gameSide = btn.dataset.side;
+  G.human = gameSide;
+  newGame();
+});
+
+$("pgnBtn").onclick = async () => {
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, ".");
+  const white = G.human === "w" ? "Joueur" : "Stockfish";
+  const black = G.human === "w" ? "Stockfish" : "Joueur";
+  const result = G.over ? G.over.result : "*";
+  let body = "";
+  G.history.forEach((h, i) => { if (i % 2 === 0) body += `${i / 2 + 1}. `; body += h.san + " "; });
+  const pgn = `[Event "Partie contre Stockfish"]\n[Date "${date}"]\n[White "${white}"]\n[Black "${black}"]\n` +
+              `[Result "${result}"]\n[Niveau "${G.level.name}"]\n\n${body}${result}\n`;
+  try { await navigator.clipboard.writeText(pgn); $("pgnBtn").textContent = "Copié"; }
+  catch { $("pgnBtn").textContent = "Échec"; }
+  setTimeout(() => { $("pgnBtn").textContent = "Copier PGN"; }, 1600);
+};
+
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") { G.sel = -1; G.hint = null; els.overlay.classList.remove("show"); render(); }
+});
+
+/* =========================================================================
+   4. MODE PUZZLES
+   Les puzzles viennent de la base Lichess, pré-découpée en tranches de rating
+   dans ./puzzles/ (voir puzzles/index.json). Une tranche ne se télécharge que
+   lorsqu'on en a besoin.
+
+   Format Lichess : le FEN est la position AVANT le coup de l'adversaire.
+   Le premier coup de la liste est donc joué automatiquement pour amener la
+   position du puzzle ; le joueur enchaîne à partir du deuxième.
+   ========================================================================= */
+
+const PZ_KEY = "echiquier.puzzles.v1";
+const PZ_DIR = "puzzles/";
+
+const THEME_GROUPS = [
+  ["Mats", {
+    mateIn1: "Mat en 1", mateIn2: "Mat en 2", mateIn3: "Mat en 3", mateIn4: "Mat en 4",
+    backRankMate: "Mat du couloir", smotheredMate: "Mat étouffé", arabianMate: "Mat arabe",
+    anastasiaMate: "Mat d'Anastasie", bodenMate: "Mat de Boden", hookMate: "Mat de l'hameçon"
+  }],
+  ["Tactique", {
+    fork: "Fourchette", pin: "Clouage", skewer: "Enfilade",
+    discoveredAttack: "Attaque à la découverte", doubleCheck: "Échec double",
+    sacrifice: "Sacrifice", deflection: "Déviation", attraction: "Attraction",
+    hangingPiece: "Pièce en prise", trappedPiece: "Pièce piégée",
+    capturingDefender: "Prise du défenseur", xRayAttack: "Attaque aux rayons X",
+    clearance: "Dégagement", interference: "Interception", intermezzo: "Coup intermédiaire",
+    zugzwang: "Zugzwang", quietMove: "Coup calme", defensiveMove: "Coup défensif"
+  }],
+  ["Phase de jeu", {
+    opening: "Ouverture", middlegame: "Milieu de partie", endgame: "Finale",
+    rookEndgame: "Finale de tours", pawnEndgame: "Finale de pions",
+    knightEndgame: "Finale de cavaliers", bishopEndgame: "Finale de fous",
+    queenEndgame: "Finale de dames"
+  }],
+  ["Situations", {
+    promotion: "Promotion", underPromotion: "Sous-promotion", enPassant: "Prise en passant",
+    castling: "Roque", advancedPawn: "Pion avancé", exposedKing: "Roi exposé",
+    kingsideAttack: "Attaque sur l'aile roi", queensideAttack: "Attaque sur l'aile dame"
+  }],
+  ["Longueur", {
+    oneMove: "Un seul coup", short: "Court (2 coups)", long: "Long (3 coups)", veryLong: "Très long (4+)"
+  }]
+];
+
+const THEME_LABEL = {};
+for (const [, map] of THEME_GROUPS) Object.assign(THEME_LABEL, map);
+
+const P = {
+  meta: null,               // contenu de index.json
+  bands: new Map(),         // lo -> tableau de puzzles déjà téléchargés
+  row: null,                // ligne brute du puzzle courant
+  cur: null,                // puzzle décodé
+  sol: [],                  // coups attendus, en commençant par celui du joueur
+  step: 0,                  // position dans sol
+  failed: false,            // erreur, indice ou solution demandée
+  hinted: 0,
+  theme: "",
+  dailyFor: null,           // date du puzzle du jour si c'en est un
+  busy: false,
+  stats: { rating: 1200, solved: 0, missed: 0, streak: 0, best: 0, seen: [], dailyDone: null }
+};
+
+function pzLoadStats() {
+  try {
+    const raw = localStorage.getItem(PZ_KEY);
+    if (raw) Object.assign(P.stats, JSON.parse(raw));
+  } catch (e) { /* stockage indisponible : on reste sur les valeurs par défaut */ }
+}
+function pzSaveStats() {
+  try { localStorage.setItem(PZ_KEY, JSON.stringify(P.stats)); } catch (e) {}
+}
+
+function pzStatus(main, sub, tone) { setStatus(main, sub, tone || ""); }
+
+async function pzMeta() {
+  if (P.meta) return P.meta;
+  const r = await fetch(PZ_DIR + "index.json");
+  if (!r.ok) throw new Error("index.json (" + r.status + ")");
+  P.meta = await r.json();
+  return P.meta;
+}
+
+async function pzBand(band) {
+  if (P.bands.has(band.lo)) return P.bands.get(band.lo);
+  pzStatus("Chargement", `Tranche ${band.lo}–${band.hi}…`, "");
+  const r = await fetch(PZ_DIR + band.file);
+  if (!r.ok) throw new Error(band.file + " (" + r.status + ")");
+  const data = await r.json();
+  P.bands.set(band.lo, data.puzzles);
+  return data.puzzles;
+}
+
+/* Choisit un puzzle proche du niveau du joueur, en respectant le filtre de
+   thème et en évitant ceux déjà vus récemment. */
+async function pzPick() {
+  const meta = await pzMeta();
+  const target = P.stats.rating;
+  const themeIdx = P.theme ? meta.themes.indexOf(P.theme) : -1;
+  const seen = new Set(P.stats.seen);
+
+  const byDistance = meta.bands
+    .map(b => ({ b, d: Math.abs((b.lo + b.hi) / 2 - target) }))
+    .sort((x, y) => x.d - y.d);
+
+  for (const { b } of byDistance.slice(0, 5)) {
+    const list = await pzBand(b);
+    const pool = themeIdx >= 0 ? list.filter(p => p[4].indexOf(themeIdx) >= 0) : list;
+    if (!pool.length) continue;
+    let fresh = pool.filter(p => !seen.has(p[0]));
+    if (!fresh.length) fresh = pool;                       // tout vu : on recycle
+    const near = fresh.filter(p => Math.abs(p[3] - target) <= 150);
+    const from = near.length >= 20 ? near : fresh;
+    return from[Math.floor(Math.random() * from.length)];
+  }
+  return null;
+}
+
+function pzStart(row) {
+  P.row = row;
+  P.cur = { id: row[0], fen: row[1], moves: row[2].split(" "), rating: row[3], themes: row[4] };
+  P.sol = P.cur.moves.slice(1);
+  P.step = 0; P.failed = false; P.hinted = 0; P.busy = true;
+
+  G.st = parseFen(P.cur.fen);
+  G.history = []; G.reps = {}; G.over = null; G.sel = -1; G.hint = null;
+  G.lastMove = null; G.mode = "idle";
+  G.human = other(G.st.turn);        // le coup d'amorce est celui de l'adversaire
+  G.orient = G.human;
+  G.legal = legalMoves(G.st);
+
+  drawCoords(); render();
+  pzRenderInfo();
+  $("pzDelta").textContent = "";
+  pzStatus("Position de départ", "L'adversaire joue…", "");
+
+  setTimeout(() => {
+    pzPlay(P.cur.moves[0]);
+    P.busy = false;
+    const side = G.human === "w" ? "Les blancs jouent" : "Les noirs jouent";
+    const n = Math.ceil(P.sol.length / 2);
+    pzStatus(
+      P.dailyFor ? "Puzzle du jour" : side,
+      `${P.dailyFor ? side + ". " : ""}Trouve le meilleur coup. ${n} coup${n > 1 ? "s" : ""} à jouer.`,
+      "turn-you");
+  }, 650);
+}
+
+/* Joue un coup scénarisé (amorce ou réponse de l'adversaire). */
+function pzPlay(uci) {
+  const m = moveFromUci(G.st, uci);
+  if (!m) { pzStatus("Puzzle illisible", "Ce puzzle est incohérent, on passe au suivant.", "bad"); return false; }
+  applyMove(m, true);
+  return true;
+}
+
+function pzAfterMove(uci, scripted, finished) {
+  if (scripted) { pzRenderInfo(); return; }
+
+  // Un mat est toujours accepté, même s'il n'est pas le coup enregistré.
+  const mated = finished && G.over && G.over.result !== "1/2-1/2";
+  if (uci !== P.sol[P.step] && !mated) {
+    P.failed = true;
+    P.busy = true;
+    pzStatus("Ce n'est pas le bon coup", "On remet la position — réessaie.", "bad");
+    setTimeout(() => { pzUndo(); P.busy = false; }, 750);
+    return;
+  }
+
+  P.step++;
+  pzRenderInfo();
+  if (mated || P.step >= P.sol.length) { pzFinish(); return; }
+
+  P.busy = true;
+  pzStatus("Bien vu", "L'adversaire réplique…", "good");
+  setTimeout(() => {
+    pzPlay(P.sol[P.step]);
+    P.step++;
+    P.busy = false;
+    pzRenderInfo();
+    if (P.step >= P.sol.length) pzFinish();
+    else pzStatus("Continue", "Trouve le coup suivant.", "turn-you");
+  }, 450);
+}
+
+function pzUndo() {
+  const entry = G.history.pop();
+  if (!entry) return;
+  G.st = entry.before;
+  G.over = null; G.sel = -1; G.hint = null;
+  G.legal = legalMoves(G.st);
+  const last = G.history[G.history.length - 1];
+  G.lastMove = last ? moveFromUci(last.before, last.uci) : null;
+  render();
+  pzStatus("À toi", "Réessaie, ou demande un indice.", "turn-you");
+}
+
+/* Elo classique : K = 24, le puzzle joue le rôle de l'adversaire. */
+function pzRate(won) {
+  const mine = P.stats.rating, his = P.cur.rating;
+  const expected = 1 / (1 + Math.pow(10, (his - mine) / 400));
+  const delta = Math.round(24 * ((won ? 1 : 0) - expected));
+  P.stats.rating = Math.max(400, Math.min(3000, mine + delta));
+  return delta;
+}
+
+function pzFinish() {
+  if (!P.cur || P.cur.done) return;
+  P.cur.done = true;
+  G.over = G.over || { title: "", detail: "", result: "*" };
+
+  const clean = !P.failed && P.hinted === 0;
+  const delta = pzRate(clean);
+
+  if (clean) {
+    P.stats.solved++;
+    P.stats.streak++;
+    P.stats.best = Math.max(P.stats.best, P.stats.streak);
+  } else {
+    P.stats.missed++;
+    P.stats.streak = 0;
+  }
+
+  P.stats.seen.push(P.cur.id);
+  if (P.stats.seen.length > 800) P.stats.seen = P.stats.seen.slice(-800);
+  if (P.dailyFor) { P.stats.dailyDone = P.dailyFor; P.dailyFor = null; }
+  pzSaveStats();
+
+  const d = $("pzDelta");
+  d.textContent = (delta >= 0 ? "+" : "") + delta;
+  d.className = "delta " + (delta >= 0 ? "up" : "down");
+
+  pzStatus(
+    clean ? "Résolu" : "Terminé",
+    clean
+      ? `Puzzle à ${P.cur.rating}. Ton elo passe à ${P.stats.rating}.`
+      : `Séquence complète. Ton elo passe à ${P.stats.rating}.`,
+    clean ? "good" : "bad"
+  );
+  pzRenderStats();
+  render();
+}
+
+function pzShowSolution() {
+  if (!P.cur || P.busy || G.over) return;
+  P.failed = true;
+  P.busy = true;
+  const tick = () => {
+    if (P.step >= P.sol.length) { P.busy = false; pzFinish(); return; }
+    if (!pzPlay(P.sol[P.step])) { P.busy = false; pzFinish(); return; }
+    P.step++;
+    pzRenderInfo();
+    setTimeout(tick, 500);
+  };
+  pzStatus("Solution", "Déroulement de la séquence…", "bad");
+  tick();
+}
+
+function pzHint() {
+  if (!P.cur || P.busy || G.over || G.st.turn !== G.human) return;
+  const m = moveFromUci(G.st, P.sol[P.step]);
+  if (!m) return;
+  P.hinted++;
+  // Premier indice : la pièce seule. Deuxième : la case d'arrivée aussi.
+  G.hint = P.hinted === 1 ? { from: m.from, to: -1 } : { from: m.from, to: m.to };
+  render();
+  pzStatus(P.hinted === 1 ? "Indice" : "Indice complet",
+    P.hinted === 1 ? "La pièce à jouer est entourée." : "Départ et arrivée sont entourés.",
+    "turn-you");
+}
+
+function pzRenderInfo() {
+  if (!P.cur) return;
+  $("pzRating").textContent = P.cur.rating;
+  $("pzId").innerHTML = `<a href="https://lichess.org/training/${P.cur.id}" target="_blank" rel="noopener"
+    style="color:var(--dim)">${P.cur.id}</a>`;
+  const total = Math.ceil(P.sol.length / 2);
+  const current = Math.min(total, Math.floor(P.step / 2) + 1);
+  $("pzSteps").textContent = `coup ${current} / ${total}`;
+
+  const names = P.cur.themes
+    .map(i => P.meta.themes[i])
+    .filter(t => THEME_LABEL[t])
+    .slice(0, 5);
+  $("pzThemes").innerHTML = names
+    .map(t => `<span class="chip${t === P.theme ? " tag" : ""}">${THEME_LABEL[t]}</span>`)
+    .join("");
+}
+
+function pzRenderStats() {
+  $("stRating").textContent = P.stats.rating;
+  $("stSolved").textContent = P.stats.solved;
+  $("stStreak").textContent = P.stats.streak;
+  $("stBest").textContent = P.stats.best;
+  const today = new Date().toISOString().slice(0, 10);
+  $("pzNote").textContent = P.stats.dailyDone === today
+    ? "Puzzle du jour déjà fait aujourd'hui."
+    : "Ta progression est enregistrée dans ce navigateur.";
+}
+
+function pzFillThemes() {
+  const sel = $("pzTheme");
+  const available = new Set(P.meta.themes);
+  let html = `<option value="">Tous les thèmes</option>`;
+  for (const [group, map] of THEME_GROUPS) {
+    const opts = Object.keys(map)
+      .filter(t => available.has(t))
+      .map(t => `<option value="${t}">${map[t]}</option>`)
+      .join("");
+    if (opts) html += `<optgroup label="${group}">${opts}</optgroup>`;
+  }
+  sel.innerHTML = html;
+  sel.value = P.theme;
+}
+
+/* Hachage FNV-1a : même date = même puzzle du jour pour tout le monde. */
+function pzHash(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+
+async function pzNext() {
+  if (P.busy) return;
+  try {
+    const row = await pzPick();
+    if (!row) {
+      pzStatus("Aucun puzzle", "Ce thème n'a rien à ton niveau — essaie un autre thème.", "bad");
+      return;
+    }
+    P.dailyFor = null;
+    pzStart(row);
+  } catch (e) {
+    pzStatus("Puzzles indisponibles", "Impossible de charger " + e.message + ".", "bad");
+  }
+}
+
+async function pzDaily() {
+  if (P.busy) return;
+  try {
+    const meta = await pzMeta();
+    const day = new Date().toISOString().slice(0, 10);
+    const band = meta.bands.find(b => b.lo === 1400) || meta.bands[Math.floor(meta.bands.length / 2)];
+    const list = await pzBand(band);
+    P.dailyFor = day;
+    pzStart(list[pzHash(day) % list.length]);
+  } catch (e) {
+    pzStatus("Puzzles indisponibles", "Impossible de charger " + e.message + ".", "bad");
+  }
+}
+
+async function pzEnter() {
+  pzRenderStats();
+  try {
+    await pzMeta();
+    pzFillThemes();
+    await pzNext();
+  } catch (e) {
+    pzStatus("Puzzles indisponibles", "Impossible de charger " + e.message + ".", "bad");
+  }
+}
+
+/* ---------- bascule de mode ---------- */
+function setMode(mode) {
+  if (mode === MODE) return;
+  engineStop();
+  G.mode = "idle";
+  MODE = mode;
+  P.busy = false;
+
+  [...$("modeSeg").children].forEach(b =>
+    b.setAttribute("aria-pressed", String(b.dataset.mode === mode)));
+  $("gamePanel").hidden = mode !== "game";
+  $("puzzlePanel").hidden = mode !== "puzzle";
+  $("evalbar").hidden = mode !== "game";
+
+  if (mode === "game") { G.human = gameSide; newGame(); }
+  else pzEnter();
+}
+
+$("modeSeg").addEventListener("click", e => {
+  const btn = e.target.closest("button[data-mode]");
+  if (btn) setMode(btn.dataset.mode);
+});
+
+$("pzNext").onclick = () => pzNext();
+$("pzHint").onclick = pzHint;
+$("pzSolve").onclick = pzShowSolution;
+$("pzRetry").onclick = () => { if (P.row && !P.busy) pzStart(P.row); };
+$("pzDaily").onclick = () => pzDaily();
+$("pzTheme").onchange = e => { P.theme = e.target.value; pzNext(); };
+$("pzReset").onclick = () => {
+  P.stats = { rating: 1200, solved: 0, missed: 0, streak: 0, best: 0, seen: [], dailyDone: null };
+  pzSaveStats();
+  pzRenderStats();
+  $("pzDelta").textContent = "";
+};
+
+pzLoadStats();
+pzRenderStats();
+
+/* ---------- démarrage ---------- */
+Engine.onLine = logInfo;
+Engine.onBest = onBestMove;
+
+/* La taille des glyphes suit la case réelle, jamais la hauteur de la fenêtre :
+   sinon une pièce trop haute étire sa rangée et l'échiquier déborde. */
+function sizePieces() {
+  const cell = els.board.clientWidth / 8;
+  if (cell > 0) els.board.style.fontSize = (cell * 0.78) + "px";
+}
+if (window.ResizeObserver) new ResizeObserver(sizePieces).observe(els.board);
+window.addEventListener("resize", sizePieces);
+
+G.legal = legalMoves(G.st);
+drawCoords(); render(); refreshStatus(); setEval(0, null); sizePieces();
+
+bootEngine(msg => { els.engineName.textContent = msg; }).then(ok => {
+  els.engineName.textContent = Engine.label;
+  els.pulse.className = "pulse " + (ok ? "on" : "off");
+  if (!ok) els.sub.textContent = "Stockfish n'a pas pu être chargé — le moteur de secours prend le relais.";
+  if (G.st.turn !== G.human && !G.over) askEngine();
+});
+
+</script>
+</body>
+</html>
