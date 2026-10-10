@@ -36,41 +36,47 @@ body{
   font-size:13px;
   line-height:1.5;
   -webkit-font-smoothing:antialiased;
-  padding:24px 20px 48px;
+  /* Mobile d'abord : marges serrées, en respectant les encoches. */
+  padding:12px max(12px, env(safe-area-inset-right)) 32px max(12px, env(safe-area-inset-left));
 }
+
+/* Chaque mode n'affiche que ses propres éléments (data-mode posé sur <body>). */
+body[data-mode="puzzle"] [data-for="game"],
+body[data-mode="game"] [data-for="puzzle"]{display:none!important}
 
 /* ---------- en-tête ---------- */
 .masthead{
-  max-width:1140px;margin:0 auto 22px;
-  display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;
-  border-bottom:1px solid var(--line);padding-bottom:14px;
+  max-width:640px;margin:0 auto 14px;
+  display:flex;align-items:center;gap:12px;
+  border-bottom:1px solid var(--line);padding-bottom:12px;
 }
+.masthead .spacer{flex:1}
 .wordmark{
-  font-family:var(--display);font-weight:800;font-size:clamp(26px,4vw,38px);
-  letter-spacing:-.035em;margin:0;line-height:1.12;padding-top:2px;
+  font-family:var(--display);font-weight:800;font-size:clamp(24px,6vw,38px);
+  letter-spacing:-.035em;margin:0;line-height:1.1;
 }
 .wordmark em{font-style:normal;color:var(--engine)}
 .engine-id{
   font-size:11px;color:var(--dim);letter-spacing:.09em;text-transform:uppercase;
-  margin-left:auto;display:flex;align-items:center;gap:8px;
+  display:none;align-items:center;gap:8px;
 }
 .pulse{width:6px;height:6px;border-radius:50%;background:var(--dim);flex:none}
 .pulse.on{background:var(--you);box-shadow:0 0 0 3px rgba(99,210,195,.15)}
 .pulse.busy{background:var(--engine);box-shadow:0 0 0 3px rgba(233,165,63,.15)}
 .pulse.off{background:var(--danger)}
 
-/* ---------- grille principale ---------- */
+/* ---------- grille principale ----------
+   Une colonne centrée sur téléphone et tablette, deux colonnes aérées sur PC. */
 .layout{
-  max-width:1140px;margin:0 auto;
-  display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:26px;align-items:start;
+  max-width:640px;margin:0 auto;
+  display:grid;grid-template-columns:minmax(0,1fr);gap:14px;align-items:start;
 }
-@media (max-width:900px){ .layout{grid-template-columns:minmax(0,1fr)} }
 
 /* ---------- zone échiquier ---------- */
-.board-area{display:flex;gap:12px;align-items:stretch;justify-content:center}
+.board-area{display:flex;gap:6px;align-items:stretch;justify-content:center}
 
 .evalbar{
-  width:16px;flex:none;background:#232a32;border:1px solid var(--line);
+  width:8px;flex:none;background:#232a32;border:1px solid var(--line);
   position:relative;overflow:hidden;border-radius:var(--radius);
   align-self:stretch;
 }
@@ -81,8 +87,8 @@ body{
 }
 .evalbar .mid{position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(233,165,63,.55)}
 
-.board-col{flex:1 1 auto;min-width:0;width:100%;max-width:min(72vh,620px)}
-.board-wrap{width:100%;display:grid;grid-template-columns:16px minmax(0,1fr);grid-template-rows:auto 16px;gap:4px}
+.board-col{flex:1 1 auto;min-width:0;width:100%;max-width:min(72vh,640px)}
+.board-wrap{width:100%;display:grid;grid-template-columns:12px minmax(0,1fr);grid-template-rows:auto 14px;gap:3px}
 .ranks,.files{display:grid;font-size:9px;color:var(--dim);letter-spacing:.05em}
 .ranks{grid-template-rows:repeat(8,minmax(0,1fr));align-items:center;justify-items:center}
 .files{grid-column:2;grid-template-columns:repeat(8,minmax(0,1fr));align-items:center;justify-items:center}
@@ -122,9 +128,8 @@ body{
 .drag-ghost{position:fixed;z-index:99;pointer-events:none;transform:translate(-50%,-50%);font-size:64px;line-height:1}
 
 /* ---------- panneau ---------- */
-.panel{display:flex;flex-direction:column;gap:14px;min-width:0}
-#gamePanel,#puzzlePanel{display:flex;flex-direction:column;gap:14px;min-width:0}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:13px 14px}
+.panel{display:flex;flex-direction:column;gap:12px;min-width:0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px}
 .eyebrow{
   font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);
   margin:0 0 9px;display:flex;justify-content:space-between;align-items:center;
@@ -136,13 +141,30 @@ body{
 .card.turn-engine{border-left:2px solid var(--engine)}
 .card.over{border-left:2px solid var(--bone)}
 
-.row{display:flex;gap:7px;flex-wrap:wrap}
+/* Statut : message à gauche, rating du puzzle à droite. */
+.status-card{display:flex;align-items:center;gap:14px}
+.status-text{flex:1;min-width:0}
+.status-meta{flex:none;text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:3px}
+
+/* Barre d'actions : 4 gros boutons à portée de pouce. */
+.actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.actions button{min-height:46px;padding:0 4px}
+
 button{
   font-family:var(--mono);font-size:11px;letter-spacing:.05em;text-transform:uppercase;
   background:var(--panel-2);color:var(--bone);border:1px solid var(--line);
   border-radius:var(--radius);padding:7px 11px;cursor:pointer;transition:background .12s,border-color .12s;
+  touch-action:manipulation;
 }
-button:hover:not(:disabled){background:#2a323c;border-color:#3c4652}
+button.link{
+  background:none;border:none;padding:0;min-height:0;color:var(--dim);
+  text-transform:none;letter-spacing:0;text-decoration:underline;font-size:11px;
+}
+button.link:hover:not(:disabled){background:none;color:var(--slate)}
+/* Survol seulement avec une souris : sur écran tactile il resterait « collé ». */
+@media (hover:hover){
+  button:hover:not(:disabled){background:#2a323c;border-color:#3c4652}
+}
 button:focus-visible{outline:2px solid var(--you);outline-offset:2px}
 button:disabled{opacity:.35;cursor:not-allowed}
 button.primary{background:var(--you);color:#0f1418;border-color:var(--you);font-weight:700}
@@ -152,7 +174,7 @@ button.primary:hover:not(:disabled){background:#7ee0d2}
 .field:last-child{margin-bottom:0}
 label.lbl{display:block;font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);margin-bottom:6px}
 .seg{display:grid;grid-auto-flow:column;gap:4px}
-.seg button{width:100%;padding:6px 4px}
+.seg button{width:100%;padding:6px 4px;min-height:40px}
 .seg button[aria-pressed="true"]{background:var(--bone);color:#14181d;border-color:var(--bone);font-weight:700}
 input[type=range]{width:100%;accent-color:var(--you);margin:2px 0 0}
 .level-name{color:var(--bone);font-size:11px;float:right;text-transform:none;letter-spacing:0}
@@ -181,31 +203,55 @@ input[type=range]{width:100%;accent-color:var(--you);margin:2px 0 0}
 .promo .choices{display:flex;gap:6px;margin-top:12px}
 .promo .choices button{font-size:34px;padding:6px 12px;line-height:1}
 
-/* ---------- bascule partie / puzzles ---------- */
-.modes{display:flex;gap:4px}
-.modes button{padding:6px 14px}
+/* ---------- pop-up de puzzle réussi ---------- */
+.solved{
+  width:min(340px, calc(100vw - 32px));
+  background:var(--panel);border:1px solid var(--line);border-top:2px solid var(--you);
+  border-radius:var(--radius);padding:24px 22px 20px;text-align:center;
+  animation:pop .22s cubic-bezier(.22,.61,.36,1);
+}
+.solved-mark{
+  width:48px;height:48px;margin:0 auto 12px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(99,210,195,.14);color:var(--you);font-size:24px;font-weight:700;
+}
+.solved-title{font-family:var(--display);font-weight:800;font-size:22px;letter-spacing:-.02em;margin:0}
+.solved-sub{color:var(--slate);font-size:12px;margin:6px 0 18px}
+.solved-sub b{color:var(--you)}
+.solved-actions{display:flex;flex-direction:column;gap:8px}
+.solved-actions button{min-height:46px;width:100%}
+@keyframes pop{from{opacity:0;transform:translateY(8px) scale(.97)}to{opacity:1;transform:none}}
+
+/* ---------- bascule puzzles / partie ---------- */
+.modes{display:flex;gap:4px;flex:none}
+.modes button{padding:0 14px;min-height:38px}
 .modes button[aria-pressed="true"]{background:var(--bone);color:#14181d;border-color:var(--bone);font-weight:700}
 
 /* ---------- puzzles ---------- */
 .card.good{border-left:2px solid var(--you)}
 .card.bad{border-left:2px solid var(--danger)}
 
-.pz-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
-.pz-rating{font-family:var(--display);font-weight:800;font-size:27px;letter-spacing:-.025em;line-height:1}
-.pz-steps{font-size:10px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;text-align:right}
-.chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:10px}
+.pz-rating{font-family:var(--display);font-weight:800;font-size:26px;letter-spacing:-.025em;line-height:1}
+.pz-steps{font-size:9.5px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;white-space:nowrap}
+.pz-steps a{color:var(--dim)}
+.chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
+.chips:empty{display:none}
 .chip{
   font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate);
   border:1px solid var(--line);border-radius:2px;padding:2px 6px;background:var(--panel-2);
 }
 .chip.tag{color:var(--engine);border-color:rgba(233,165,63,.35)}
 
+/* 16px sur mobile : en dessous, iOS zoome la page au focus du menu. */
 select{
-  font-family:var(--mono);font-size:11px;width:100%;
+  font-family:var(--mono);font-size:16px;width:100%;min-height:42px;
   background:var(--panel-2);color:var(--bone);
-  border:1px solid var(--line);border-radius:var(--radius);padding:7px 8px;
+  border:1px solid var(--line);border-radius:var(--radius);padding:0 8px;
 }
 select:focus-visible{outline:2px solid var(--you);outline-offset:2px}
+.inline{display:flex;gap:8px;align-items:stretch}
+.inline select{flex:1;min-width:0}
+.inline button{flex:none}
 
 .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
 .stat{min-width:0}
@@ -214,31 +260,53 @@ select:focus-visible{outline:2px solid var(--you);outline-offset:2px}
 .delta{font-size:11px;font-weight:700;letter-spacing:0;text-transform:none}
 .delta.up{color:var(--you)}
 .delta.down{color:var(--danger)}
-.pz-note{color:var(--slate);font-size:11px;margin:10px 0 0}
-.pz-note a{color:var(--slate)}
+.pz-note{color:var(--slate);font-size:11px;margin:10px 0 0;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
 [hidden]{display:none!important}
 
 /* ---------- pied ---------- */
-.foot{max-width:1140px;margin:26px auto 0;color:var(--dim);font-size:10px;border-top:1px solid var(--line);padding-top:12px}
+.foot{max-width:640px;margin:24px auto 0;color:var(--dim);font-size:10px;border-top:1px solid var(--line);padding-top:12px}
 .foot a{color:var(--slate)}
+
+/* La console moteur n'apporte rien sur petit écran. */
+@media (max-width:959px){ .desktop-only{display:none!important} }
+
+/* ---------- PC : deux colonnes, de l'air partout ---------- */
+@media (min-width:960px){
+  body{padding:36px 40px 64px}
+  .masthead,.layout,.foot{max-width:1180px}
+  .masthead{margin-bottom:36px;padding-bottom:18px;gap:28px}
+  body[data-mode="game"] .engine-id{display:flex}
+  .layout{grid-template-columns:minmax(0,1fr) 360px;gap:56px}
+  .board-area{gap:14px}
+  .evalbar{width:16px}
+  .board-col{max-width:min(80vh,680px)}
+  .board-wrap{grid-template-columns:16px minmax(0,1fr);grid-template-rows:auto 16px;gap:4px}
+  .ranks,.files{font-size:10px}
+  .panel{gap:18px}
+  .card{padding:18px 20px}
+  .pz-rating{font-size:30px}
+  select{font-size:12px}
+  .foot{margin-top:48px}
+}
 
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
-<body>
+<body data-mode="puzzle">
 
 <header class="masthead">
   <h1 class="wordmark">Échi<em>quier</em></h1>
-  <nav class="modes" id="modeSeg">
-    <button data-mode="game" aria-pressed="true">Partie</button>
-    <button data-mode="puzzle" aria-pressed="false">Puzzles</button>
-  </nav>
+  <span class="spacer"></span>
   <div class="engine-id"><span class="pulse" id="pulse"></span><span id="engineName">démarrage…</span></div>
+  <nav class="modes" id="modeSeg">
+    <button data-mode="puzzle" aria-pressed="true">Puzzles</button>
+    <button data-mode="game" aria-pressed="false">Partie</button>
+  </nav>
 </header>
 
 <main class="layout">
   <section class="board-area">
-    <div class="evalbar" id="evalbar" title="Évaluation (blancs en bas)">
+    <div class="evalbar" id="evalbar" data-for="game" title="Évaluation (blancs en bas)">
       <div class="white-share" id="evalWhite"></div><div class="mid"></div>
     </div>
     <div class="board-col">
@@ -250,15 +318,61 @@ select:focus-visible{outline:2px solid var(--you);outline-offset:2px}
     </div>
   </section>
 
+  <!-- Ordre pensé pour le téléphone : statut et boutons juste sous l'échiquier,
+       le reste ensuite. Chaque mode ne montre que ses blocs (data-for). -->
   <aside class="panel">
-    <div class="card" id="statusCard">
-      <p id="status">Nouvelle partie</p>
-      <p id="substatus">À toi de jouer.</p>
+    <div class="card status-card" id="statusCard">
+      <div class="status-text">
+        <p id="status">Chargement</p>
+        <p id="substatus">Préparation des puzzles…</p>
+        <div class="chips" id="pzThemes" data-for="puzzle"></div>
+      </div>
+      <div class="status-meta" data-for="puzzle">
+        <span class="pz-rating" id="pzRating">—</span>
+        <span class="pz-steps" id="pzSteps"></span>
+        <span class="pz-steps" id="pzId"></span>
+      </div>
     </div>
 
-    <div id="gamePanel">
-    <div class="card">
-      <p class="eyebrow">Réglages</p>
+    <!-- ===== Puzzles ===== -->
+    <div class="actions" data-for="puzzle">
+      <button class="primary" id="pzNext">Suivant</button>
+      <button id="pzHint">Indice</button>
+      <button id="pzSolve">Solution</button>
+      <button id="pzRetry">Rejouer</button>
+    </div>
+
+    <div class="card" data-for="puzzle">
+      <label class="lbl" for="pzTheme">Thème</label>
+      <div class="inline">
+        <select id="pzTheme"></select>
+        <button id="pzDaily">Du jour</button>
+      </div>
+    </div>
+
+    <div class="card" data-for="puzzle">
+      <p class="eyebrow">Progression <span class="delta" id="pzDelta"></span></p>
+      <div class="stats">
+        <div class="stat"><b id="stRating">1200</b><span>ton elo</span></div>
+        <div class="stat"><b id="stSolved">0</b><span>résolus</span></div>
+        <div class="stat"><b id="stStreak">0</b><span>série</span></div>
+        <div class="stat"><b id="stBest">0</b><span>record</span></div>
+      </div>
+      <div class="pz-note">
+        <span id="pzNote"></span>
+        <button class="link" id="pzReset">Remettre à zéro</button>
+      </div>
+    </div>
+
+    <!-- ===== Partie ===== -->
+    <div class="actions" data-for="game">
+      <button class="primary" id="newBtn">Nouvelle</button>
+      <button id="undoBtn">Annuler</button>
+      <button id="hintBtn">Indice</button>
+      <button id="flipBtn">Pivoter</button>
+    </div>
+
+    <div class="card" data-for="game">
       <div class="field">
         <label class="lbl" for="level">Niveau <span class="level-name" id="levelName">Club</span></label>
         <input type="range" id="level" min="0" max="5" step="1" value="2">
@@ -270,67 +384,20 @@ select:focus-visible{outline:2px solid var(--you);outline-offset:2px}
           <button data-side="b" aria-pressed="false">Noirs</button>
         </div>
       </div>
-      <div class="row">
-        <button class="primary" id="newBtn">Nouvelle partie</button>
-        <button id="undoBtn">Annuler</button>
-        <button id="flipBtn">Pivoter</button>
-        <button id="hintBtn">Indice</button>
-      </div>
     </div>
 
-    <div class="card">
+    <div class="card" data-for="game">
       <p class="eyebrow">Feuille de partie <button id="pgnBtn" style="padding:2px 7px;font-size:9px">Copier PGN</button></p>
       <div class="sheet" id="sheet"><p class="empty">Les coups s'inscrivent ici.</p></div>
     </div>
 
-    <div class="card">
+    <div class="card desktop-only" data-for="game">
       <p class="eyebrow">Sortie du moteur</p>
       <div id="console"><span>en attente…</span></div>
       <div class="metrics">
         <span>éval <b id="mEval">0.00</b></span>
         <span>prof. <b id="mDepth">—</b></span>
         <span>nœuds <b id="mNodes">—</b></span>
-      </div>
-    </div>
-    </div><!-- /gamePanel -->
-
-    <div id="puzzlePanel" hidden>
-      <div class="card">
-        <p class="eyebrow">Puzzle <span id="pzId"></span></p>
-        <div class="pz-head">
-          <span class="pz-rating" id="pzRating">—</span>
-          <span class="pz-steps" id="pzSteps"></span>
-        </div>
-        <div class="chips" id="pzThemes"></div>
-        <div class="row" style="margin-top:13px">
-          <button class="primary" id="pzNext">Suivant</button>
-          <button id="pzHint">Indice</button>
-          <button id="pzSolve">Solution</button>
-          <button id="pzRetry">Rejouer</button>
-        </div>
-      </div>
-
-      <div class="card">
-        <p class="eyebrow">Sélection</p>
-        <div class="field">
-          <label class="lbl" for="pzTheme">Thème</label>
-          <select id="pzTheme"></select>
-        </div>
-        <div class="row">
-          <button id="pzDaily">Puzzle du jour</button>
-          <button id="pzReset">Remettre à zéro</button>
-        </div>
-      </div>
-
-      <div class="card">
-        <p class="eyebrow">Progression <span class="delta" id="pzDelta"></span></p>
-        <div class="stats">
-          <div class="stat"><b id="stRating">1200</b><span>ton elo</span></div>
-          <div class="stat"><b id="stSolved">0</b><span>résolus</span></div>
-          <div class="stat"><b id="stStreak">0</b><span>série</span></div>
-          <div class="stat"><b id="stBest">0</b><span>record</span></div>
-        </div>
-        <p class="pz-note" id="pzNote"></p>
       </div>
     </div>
   </aside>
@@ -346,6 +413,19 @@ select:focus-visible{outline:2px solid var(--you);outline-offset:2px}
   <div class="promo">
     <p class="eyebrow" style="margin:0">Promotion</p>
     <div class="choices" id="promoChoices"></div>
+  </div>
+</div>
+
+<!-- Affichée quand un puzzle est résolu sans erreur ni indice. -->
+<div class="overlay" id="solvedOverlay" role="dialog" aria-modal="true" aria-labelledby="solvedTitle">
+  <div class="solved">
+    <div class="solved-mark" aria-hidden="true">✓</div>
+    <p class="solved-title" id="solvedTitle">Problème résolu</p>
+    <p class="solved-sub" id="solvedSub"></p>
+    <div class="solved-actions">
+      <button class="primary" id="solvedNext">Problème suivant</button>
+      <button id="solvedStay">Revoir la position</button>
+    </div>
   </div>
 </div>
 
@@ -916,7 +996,7 @@ function drawSheet() {
 function setStatus(main, sub, tone) {
   els.status.textContent = main;
   els.sub.textContent = sub;
-  els.card.className = "card" + (tone ? " " + tone : "");
+  els.card.className = "card status-card" + (tone ? " " + tone : "");
 }
 
 function refreshStatus() {
@@ -1192,7 +1272,11 @@ $("pgnBtn").onclick = async () => {
 };
 
 document.addEventListener("keydown", e => {
-  if (e.key === "Escape") { G.sel = -1; G.hint = null; els.overlay.classList.remove("show"); render(); }
+  if (e.key === "Escape") {
+    G.sel = -1; G.hint = null; els.overlay.classList.remove("show");
+    $("solvedOverlay").classList.remove("show");
+    render();
+  }
 });
 
 /* =========================================================================
@@ -1314,6 +1398,7 @@ async function pzPick() {
 }
 
 function pzStart(row) {
+  pzHideSolved();
   P.row = row;
   P.cur = { id: row[0], fen: row[1], moves: row[2].split(" "), rating: row[3], themes: row[4] };
   P.sol = P.cur.moves.slice(1);
@@ -1420,8 +1505,17 @@ function pzFinish() {
 
   P.stats.seen.push(P.cur.id);
   if (P.stats.seen.length > 800) P.stats.seen = P.stats.seen.slice(-800);
+  const wasDaily = !!P.dailyFor;
   if (P.dailyFor) { P.stats.dailyDone = P.dailyFor; P.dailyFor = null; }
   pzSaveStats();
+
+  // Petit délai pour laisser voir le dernier coup avant la pop-up.
+  if (clean) {
+    const id = P.cur.id;
+    setTimeout(() => {
+      if (MODE === "puzzle" && P.cur && P.cur.id === id) pzShowSolved(delta, wasDaily);
+    }, 550);
+  }
 
   const d = $("pzDelta");
   d.textContent = (delta >= 0 ? "+" : "") + delta;
@@ -1435,8 +1529,27 @@ function pzFinish() {
     clean ? "good" : "bad"
   );
   pzRenderStats();
+  pzRenderInfo();   // révèle les thèmes maintenant que le puzzle est fini
   render();
 }
+
+function pzShowSolved(delta, wasDaily) {
+  $("solvedTitle").textContent = wasDaily ? "Puzzle du jour réussi" : "Problème résolu";
+  const streak = P.stats.streak > 1 ? ` · série de ${P.stats.streak}` : "";
+  $("solvedSub").innerHTML =
+    `Ton elo : ${P.stats.rating} <b>(${delta >= 0 ? "+" : ""}${delta})</b>${streak}`;
+  $("solvedOverlay").classList.add("show");
+  $("solvedNext").focus();
+}
+
+function pzHideSolved() {
+  $("solvedOverlay").classList.remove("show");
+}
+
+$("solvedNext").onclick = () => { pzHideSolved(); pzNext(); };
+$("solvedStay").onclick = pzHideSolved;
+// Un appui à côté de la carte ferme aussi la pop-up.
+$("solvedOverlay").addEventListener("click", e => { if (e.target === e.currentTarget) pzHideSolved(); });
 
 function pzShowSolution() {
   if (!P.cur || P.busy || G.over) return;
@@ -1469,12 +1582,15 @@ function pzHint() {
 function pzRenderInfo() {
   if (!P.cur) return;
   $("pzRating").textContent = P.cur.rating;
-  $("pzId").innerHTML = `<a href="https://lichess.org/training/${P.cur.id}" target="_blank" rel="noopener"
-    style="color:var(--dim)">${P.cur.id}</a>`;
+  $("pzId").innerHTML =
+    `<a href="https://lichess.org/training/${P.cur.id}" target="_blank" rel="noopener">${P.cur.id}</a>`;
   const total = Math.ceil(P.sol.length / 2);
   const current = Math.min(total, Math.floor(P.step / 2) + 1);
   $("pzSteps").textContent = `coup ${current} / ${total}`;
 
+  // Les thèmes trahissent la solution (« Fourchette »…) : on ne les montre
+  // qu'une fois le puzzle terminé.
+  if (!P.cur.done) { $("pzThemes").innerHTML = ""; return; }
   const names = P.cur.themes
     .map(i => P.meta.themes[i])
     .filter(t => THEME_LABEL[t])
@@ -1491,8 +1607,8 @@ function pzRenderStats() {
   $("stBest").textContent = P.stats.best;
   const today = new Date().toISOString().slice(0, 10);
   $("pzNote").textContent = P.stats.dailyDone === today
-    ? "Puzzle du jour déjà fait aujourd'hui."
-    : "Ta progression est enregistrée dans ce navigateur.";
+    ? "Puzzle du jour fait ✓"
+    : "Sauvegardé sur cet appareil.";
 }
 
 function pzFillThemes() {
@@ -1567,9 +1683,8 @@ function setMode(mode) {
 
   [...$("modeSeg").children].forEach(b =>
     b.setAttribute("aria-pressed", String(b.dataset.mode === mode)));
-  $("gamePanel").hidden = mode !== "game";
-  $("puzzlePanel").hidden = mode !== "puzzle";
-  $("evalbar").hidden = mode !== "game";
+  document.body.dataset.mode = mode;   // la CSS masque les blocs de l'autre mode
+  pzHideSolved();
 
   if (mode === "game") { G.human = gameSide; newGame(); }
   else pzEnter();
@@ -1587,7 +1702,8 @@ $("pzRetry").onclick = () => { if (P.row && !P.busy) pzStart(P.row); };
 $("pzDaily").onclick = () => pzDaily();
 $("pzTheme").onchange = e => { P.theme = e.target.value; pzNext(); };
 $("pzReset").onclick = () => {
-  P.stats = { rating: 1200, solved: 0, missed: 0, streak: 0, best: 0, seen: [], dailyDone: null };
+  if (!confirm("Remettre ton elo et tes statistiques à zéro ?")) return;
+  P.stats ={ rating: 1200, solved: 0, missed: 0, streak: 0, best: 0, seen: [], dailyDone: null };
   pzSaveStats();
   pzRenderStats();
   $("pzDelta").textContent = "";
@@ -1610,11 +1726,15 @@ if (window.ResizeObserver) new ResizeObserver(sizePieces).observe(els.board);
 window.addEventListener("resize", sizePieces);
 
 G.legal = legalMoves(G.st);
-drawCoords(); render(); refreshStatus(); setEval(0, null); sizePieces();
+drawCoords(); render(); setEval(0, null); sizePieces();
+
+// L'app s'ouvre sur les puzzles ; Stockfish se charge en fond pour le mode Partie.
+setMode("puzzle");
 
 bootEngine(msg => { els.engineName.textContent = msg; }).then(ok => {
   els.engineName.textContent = Engine.label;
   els.pulse.className = "pulse " + (ok ? "on" : "off");
+  if (MODE !== "game") return;   // ne pas écraser le statut ni jouer dans un puzzle
   if (!ok) els.sub.textContent = "Stockfish n'a pas pu être chargé — le moteur de secours prend le relais.";
   if (G.st.turn !== G.human && !G.over) askEngine();
 });
