@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Échiquier — jouer contre Stockfish, résoudre des puzzles</title>
 <meta name="description" content="Partie d'échecs contre le moteur Stockfish et puzzles tactiques Lichess, entièrement dans le navigateur.">
+<!-- Logo « damier » : onglet du navigateur, écran d'accueil iOS et Android. -->
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#14181d">
+<meta name="apple-mobile-web-app-title" content="Échiquier">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -55,6 +61,8 @@ body[data-mode="game"] [data-for="puzzle"]{display:none!important}
   font-family:var(--display);font-weight:800;font-size:clamp(24px,6vw,38px);
   letter-spacing:-.035em;margin:0;line-height:1.1;
 }
+.wordmark{display:flex;align-items:center;gap:.3em}
+.wordmark .logo{width:1.05em;height:1.05em;flex:none;border:1px solid var(--line);border-radius:.22em}
 .wordmark em{font-style:normal;color:var(--engine)}
 .engine-id{
   font-size:11px;color:var(--dim);letter-spacing:.09em;text-transform:uppercase;
@@ -112,6 +120,8 @@ body[data-mode="game"] [data-for="puzzle"]{display:none!important}
 .sq.last{box-shadow:inset 0 0 0 100px rgba(233,165,63,.22)}
 .sq.sel{box-shadow:inset 0 0 0 3px var(--you)}
 .sq.check{box-shadow:inset 0 0 0 100px rgba(224,100,92,.38)}
+/* Indice : case d'arrivée en surbrillance (la pièce, elle, est entourée). */
+.sq.hint-to{box-shadow:inset 0 0 0 100px rgba(233,165,63,.55)}
 
 .pc{
   font-size:1em;line-height:1;pointer-events:none;
@@ -295,7 +305,16 @@ select:focus-visible{outline:2px solid var(--you);outline-offset:2px}
 <body data-mode="puzzle">
 
 <header class="masthead">
-  <h1 class="wordmark">Échi<em>quier</em></h1>
+  <h1 class="wordmark">
+    <svg class="logo" viewBox="0 0 56 56" aria-hidden="true">
+      <rect width="56" height="56" rx="12" fill="#1a1f26"/>
+      <rect x="10" y="10" width="18" height="18" fill="#cdc8b9"/>
+      <rect x="28" y="10" width="18" height="18" fill="#5f7169"/>
+      <rect x="10" y="28" width="18" height="18" fill="#5f7169"/>
+      <rect x="28" y="28" width="18" height="18" fill="#e9a53f"/>
+    </svg>
+    <span>Échi<em>quier</em></span>
+  </h1>
   <span class="spacer"></span>
   <div class="engine-id"><span class="pulse" id="pulse"></span><span id="engineName">démarrage…</span></div>
   <nav class="modes" id="modeSeg">
@@ -962,6 +981,7 @@ function render() {
     if (G.lastMove && (sq === G.lastMove.from || sq === G.lastMove.to)) cls += " last";
     if (sq === G.sel) cls += " sel";
     if (sq === checkSq) cls += " check";
+    if (G.hint && sq === G.hint.to) cls += " hint-to";
     if (myTurn && p && colorOf(p) === G.human) cls += " playable";
     if (targets.some(m => m.to === sq)) cls += " playable";
     cell.className = cls;
@@ -970,7 +990,7 @@ function render() {
     if (p) html += `<span class="pc ${isW(p) ? "w" : "b"}">${GLYPH[p.toLowerCase()]}</span>`;
     const t = targets.find(m => m.to === sq);
     if (t) html += t.cap || t.ep ? `<span class="ring"></span>` : `<span class="dot"></span>`;
-    if (G.hint && (sq === G.hint.from || sq === G.hint.to))
+    if (G.hint && sq === G.hint.from)
       html += `<span class="ring" style="border-color:rgba(233,165,63,.85)"></span>`;
     cell.innerHTML = html;
   }
@@ -1335,7 +1355,9 @@ const P = {
   sol: [],                  // coups attendus, en commençant par celui du joueur
   step: 0,                  // position dans sol
   failed: false,            // erreur, indice ou solution demandée
-  hinted: 0,
+  hinted: 0,                // nombre total d'indices pris sur ce puzzle
+  hintAt: -1,               // coup (P.step) auquel se rapporte hintLevel
+  hintLevel: 0,             // 0 = rien, 1 = pièce montrée, 2 = case montrée
   theme: "",
   dailyFor: null,           // date du puzzle du jour si c'en est un
   busy: false,
@@ -1403,6 +1425,7 @@ function pzStart(row) {
   P.cur = { id: row[0], fen: row[1], moves: row[2].split(" "), rating: row[3], themes: row[4] };
   P.sol = P.cur.moves.slice(1);
   P.step = 0; P.failed = false; P.hinted = 0; P.busy = true;
+  P.hintAt = -1; P.hintLevel = 0;
 
   G.st = parseFen(P.cur.fen);
   G.history = []; G.reps = {}; G.over = null; G.sel = -1; G.hint = null;
@@ -1570,13 +1593,17 @@ function pzHint() {
   if (!P.cur || P.busy || G.over || G.st.turn !== G.human) return;
   const m = moveFromUci(G.st, P.sol[P.step]);
   if (!m) return;
-  P.hinted++;
-  // Premier indice : la pièce seule. Deuxième : la case d'arrivée aussi.
-  G.hint = P.hinted === 1 ? { from: m.from, to: -1 } : { from: m.from, to: m.to };
+  // Deux paliers, qui repartent de zéro à chaque coup du joueur :
+  // 1er clic → la pièce à jouer, 2e clic → la case où la jouer.
+  if (P.hintAt !== P.step) { P.hintAt = P.step; P.hintLevel = 0; }
+  P.hintLevel = Math.min(2, P.hintLevel + 1);
+  P.hinted++;   // tout indice empêche de compter le puzzle comme réussi
+  G.hint = P.hintLevel === 1 ? { from: m.from, to: -1 } : { from: m.from, to: m.to };
   render();
-  pzStatus(P.hinted === 1 ? "Indice" : "Indice complet",
-    P.hinted === 1 ? "La pièce à jouer est entourée." : "Départ et arrivée sont entourés.",
-    "turn-you");
+  if (P.hintLevel === 1)
+    pzStatus("Indice", "La pièce à jouer est entourée. Touche encore Indice pour voir la case.", "turn-you");
+  else
+    pzStatus("Indice complet", "La case où la jouer est en surbrillance.", "turn-you");
 }
 
 function pzRenderInfo() {
